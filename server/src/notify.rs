@@ -64,25 +64,37 @@ pub async fn name_of(conn: &mut SqliteConnection, user_id: &str) -> AppResult<St
 }
 
 /// Members named in a text as "@Their Name" or "@their@email". Names are
-/// matched whole, ignoring case, so "@Ana" does not match "Anabel".
+/// matched whole, ignoring case, so "@Ana" does not match "Anabel"; when
+/// names overlap ("Ana" and "Ana Silva"), the longest one at that @ wins.
 pub fn mentions(text: &str, members: &[(String, String, String)]) -> Vec<String> {
     let lower = text.to_lowercase();
-    let named = |handle: &str| {
-        if handle.trim().is_empty() {
-            return false;
-        }
-        let pat = format!("@{}", handle.to_lowercase());
-        let mut from = 0;
-        while let Some(pos) = lower[from..].find(&pat).map(|p| p + from) {
-            let end = pos + pat.len();
-            if lower[end..].chars().next().is_none_or(|c| !c.is_alphanumeric()) {
-                return true;
+    // Every (position of the @, length matched, member) found.
+    let mut hits: Vec<(usize, usize, &str)> = Vec::new();
+    for (id, name, email) in members {
+        for handle in [name, email] {
+            if handle.trim().is_empty() {
+                continue;
             }
-            from = end;
+            let pat = format!("@{}", handle.to_lowercase());
+            let mut from = 0;
+            while let Some(pos) = lower[from..].find(&pat).map(|p| p + from) {
+                let end = pos + pat.len();
+                if lower[end..].chars().next().is_none_or(|c| !c.is_alphanumeric()) {
+                    hits.push((pos, pat.len(), id));
+                }
+                from = end;
+            }
         }
-        false
-    };
-    members.iter().filter(|(_, name, email)| named(name) || named(email)).map(|(id, _, _)| id.clone()).collect()
+    }
+    let mut out: Vec<String> = Vec::new();
+    for &(pos, len, id) in &hits {
+        let longest = hits.iter().filter(|h| h.0 == pos).map(|h| h.1).max().unwrap_or(len);
+        if len == longest && !out.iter().any(|o| o == id) {
+            out.push(id.to_string());
+        }
+    }
+    // In the members' order, so results do not depend on the text's order.
+    members.iter().filter(|(id, _, _)| out.contains(id)).map(|(id, _, _)| id.clone()).collect()
 }
 
 #[cfg(test)]

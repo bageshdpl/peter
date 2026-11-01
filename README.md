@@ -9,6 +9,8 @@ it does and the build plan.
 | Web app (React) | `web/` | sign-in, projects, guided sessions with AI drafts, comments, signatures, exports, members, audit trail, settings |
 | Observer extension | `extension/` | records steps and screenshots into a session ([setup](extension/README.md)) |
 
+**On Windows?** Follow the step-by-step guide: [docs/SETUP-WINDOWS.md](docs/SETUP-WINDOWS.md).
+
 ## Get the code
 
 ```bash

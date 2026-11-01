@@ -1,11 +1,13 @@
 # Builds the ready-to-run Windows package (server, web app and extension in
-# one zip). A pushed tag like v0.2.0 publishes it as a GitHub release; running
-# the workflow by hand only keeps the zip as a downloadable artifact.
+# one zip). To publish a release, change the version in packaging/VERSION and
+# push to main: the workflow builds and tests the package, then creates the
+# release and its tag (for example v0.2.0) if that version has none yet.
 name: Release
 
 on:
   push:
-    tags: ["v*"]
+    branches: [main]
+    paths: ["packaging/VERSION"]
   workflow_dispatch:
 
 permissions:
@@ -42,7 +44,8 @@ jobs:
       - name: Package
         shell: pwsh
         run: |
-          $version = if ($env:GITHUB_REF_TYPE -eq "tag") { $env:GITHUB_REF_NAME } else { "dev-" + $env:GITHUB_SHA.Substring(0, 7) }
+          $version = "v" + (Get-Content packaging/VERSION -Raw).Trim()
+          if ($version -notmatch '^v\d+\.\d+\.\d+$') { throw "packaging/VERSION must look like 1.2.3" }
           New-Item -ItemType Directory -Path Peter | Out-Null
           Copy-Item server/target/release/peter-server.exe Peter/
           Copy-Item -Recurse web/dist Peter/web
@@ -51,6 +54,7 @@ jobs:
           $zip = "Peter-$version-windows.zip"
           Compress-Archive -Path Peter -DestinationPath $zip
           "ZIP=$zip" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       # Starts the packaged server the way start-peter.cmd does and checks the
       # app and the API answer, so a broken package is never published.
@@ -84,8 +88,14 @@ jobs:
           path: ${{ env.ZIP }}
 
       - name: Publish the release
-        if: github.ref_type == 'tag'
+        if: github.ref == 'refs/heads/main'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create $env:GITHUB_REF_NAME $env:ZIP --title "Peter $env:GITHUB_REF_NAME for Windows" --notes-file packaging/windows/RELEASE_NOTES.md
+        run: |
+          gh release view $env:VERSION 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            Write-Output "Release $env:VERSION already exists; bump packaging/VERSION to publish a new one."
+            exit 0
+          }
+          gh release create $env:VERSION $env:ZIP --target $env:GITHUB_SHA --title "Peter $env:VERSION for Windows" --notes-file packaging/windows/RELEASE_NOTES.md

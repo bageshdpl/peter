@@ -79,11 +79,41 @@ async fn load(state: &AppState, auth: &Auth, id: &str) -> AppResult<SessionView>
     session.ok_or_else(|| AppError::not_found("No such session."))
 }
 
-/// A session with the definition of its validation type and steps.
+#[derive(Serialize, sqlx::FromRow)]
+struct StepState {
+    step_id: String,
+    status: String,
+    updated_by_name: String,
+    updated_at: i64,
+}
+
+#[derive(Serialize, sqlx::FromRow)]
+struct DocumentSummary {
+    step_id: String,
+    title: String,
+    status: String,
+    current_version: i64,
+    updated_at: i64,
+}
+
+/// A session with its validation type, the state of each step, and its documents.
 pub async fn get(State(state): State<AppState>, auth: Auth, Path(id): Path<String>) -> AppResult<Json<Value>> {
     let session = load(&state, &auth, &id).await?;
     let kind = catalog::find(&session.validation_type);
-    Ok(Json(json!({ "session": session, "type": kind })))
+    let steps: Vec<StepState> = sqlx::query_as(
+        "SELECT s.step_id, s.status, u.name AS updated_by_name, s.updated_at
+         FROM step_states s JOIN users u ON u.id = s.updated_by WHERE s.session_id = ?",
+    )
+    .bind(&id)
+    .fetch_all(&state.db)
+    .await?;
+    let documents: Vec<DocumentSummary> = sqlx::query_as(
+        "SELECT step_id, title, status, current_version, updated_at FROM documents WHERE session_id = ?",
+    )
+    .bind(&id)
+    .fetch_all(&state.db)
+    .await?;
+    Ok(Json(json!({ "session": session, "type": kind, "step_states": steps, "documents": documents })))
 }
 
 #[derive(Deserialize)]

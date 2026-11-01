@@ -1,5 +1,6 @@
 mod audit;
 mod auth;
+mod documents;
 mod extension;
 mod members;
 mod observations;
@@ -71,6 +72,12 @@ pub fn router(max_upload_bytes: usize) -> Router<AppState> {
         .route("/sessions/{id}/observations/{observation_id}", delete(observations::remove))
         .route("/sessions/{id}/observations/{observation_id}/screenshot", get(observations::screenshot))
         .route("/sessions/{id}/events", get(observations::events))
+        .route("/sessions/{id}/current", post(documents::set_current))
+        .route("/sessions/{id}/steps/{step_id}", axum::routing::put(documents::set_step_status))
+        .route("/ai/providers", get(documents::providers))
+        .route("/sessions/{id}/documents/{step_id}", get(documents::get).put(documents::save))
+        .route("/sessions/{id}/documents/{step_id}/draft", post(documents::start_draft))
+        .route("/sessions/{id}/documents/{step_id}/versions/{version}", get(documents::get_version))
 }
 
 /// JSON body extractor whose errors use the API's error shape.

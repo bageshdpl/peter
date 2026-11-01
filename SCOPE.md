@@ -62,11 +62,11 @@ Each module is decided on its own: in, later, or out.
 - Sends observations to the API; the web app shows them live (SSE).
 - Web app detects whether the extension is installed.
 
-### M3. Guided workflow
+### M3. Guided workflow (done)
 - The validation types and their steps above.
 - Move forward, back, or jump to a step; mark a step reviewed or skipped.
 
-### M4. AI drafting
+### M4. AI drafting (done; testing-style preferences later)
 - Provider layer: OpenRouter and Gemini first, any OpenAI-compatible API.
 - Start, stream, and stop a draft for a step; every claim cites an observation.
 - Chat with the session and with a single step.

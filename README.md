@@ -5,8 +5,8 @@ it does and the build plan.
 
 | Part | Folder | Status |
 | --- | --- | --- |
-| API server (Rust) | `server/` | M0 Foundation, M1 Projects and sessions, M2 Observation |
-| Web app (React) | `web/` | sign-in, projects, sessions, sources, members, audit trail, settings |
+| API server (Rust) | `server/` | M0 Foundation, M1 Projects and sessions, M2 Observation, M3 Guided steps, M4 AI drafting |
+| Web app (React) | `web/` | sign-in, projects, guided sessions with AI drafts, sources, members, audit trail, settings |
 | Observer extension | `extension/` | records steps and screenshots into a session ([setup](extension/README.md)) |
 
 ## Run the API locally
@@ -28,6 +28,55 @@ Run the tests:
 ```bash
 cargo test
 ```
+
+## AI drafting: OpenRouter and Gemini
+
+Peter drafts each step's document with the AI provider you choose. Set one or
+both keys before starting the API; keys stay on the server and are never sent
+to the browser.
+
+macOS and Linux:
+
+```bash
+export OPENROUTER_API_KEY=sk-or-...
+export GEMINI_API_KEY=AIza...
+cargo run
+```
+
+Windows PowerShell:
+
+```powershell
+$env:OPENROUTER_API_KEY = "sk-or-..."
+$env:GEMINI_API_KEY = "AIza..."
+cargo run
+```
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `OPENROUTER_API_KEY` | none | enables OpenRouter |
+| `PETER_OPENROUTER_MODEL` | `google/gemini-2.5-flash` | any model id from openrouter.ai/models |
+| `GEMINI_API_KEY` | none | enables Google Gemini (key from Google AI Studio) |
+| `PETER_GEMINI_MODEL` | `gemini-2.5-flash` | any Gemini model id |
+| `PETER_AI_SAMPLE` | `true` | offers "Sample draft (no AI)", which lists the evidence without calling any AI |
+| `PETER_AI_TIMEOUT_SECS` | `180` | how long to wait for a provider |
+
+Model names change often; if a default is retired, set the model variable to a
+current one. Each draft records the provider, model and token counts.
+
+How drafting works:
+
+- Each step has a document (for example, Requirements and risk produces the
+  user requirements and risk assessment). Peter's prompts are in
+  `server/src/prompts.rs`.
+- The prompt contains the session's evidence: observed steps (`[O12]`),
+  text from the project's source files (`[S2]`; PDF, Word, Excel, CSV, text and
+  Markdown are read), and documents drafted in earlier steps
+  (`[D:requirements]`). Hidden values are never included.
+- The AI must cite evidence for every statement and write `[GAP: ...]` where
+  evidence is missing. Peter checks every citation: ones that point at
+  evidence that does not exist are flagged in red on the page.
+- Every draft and every edit is a new version; older versions stay readable.
+  Drafts, edits and failures are in the audit trail.
 
 ## Run the web app locally
 
@@ -137,6 +186,21 @@ Step kinds: `navigate`, `click`, `input`, `select`, `submit`, `note`,
 `capture`. Steps are numbered per session in the order the server receives
 them. A screenshot's bytes must match its declared type, and its SHA-256 is
 stored.
+
+## API (M3, M4)
+
+| Method and path | Who | What |
+| --- | --- | --- |
+| `POST /v1/sessions/{id}/current` | member+ | open a step (`step_id`); a step not started becomes in progress |
+| `PUT /v1/sessions/{id}/steps/{step_id}` | member+ | set `status`: `not_started`, `in_progress`, `reviewed`, `skipped` |
+| `GET /v1/ai/providers` | member | providers set up on the server, and their models |
+| `GET /v1/sessions/{id}/documents/{step_id}` | member | the step's document, current version, citations, version list |
+| `POST /v1/sessions/{id}/documents/{step_id}/draft` | member+ | draft with `provider` and optional `instructions`; answers 202, then a `document` event |
+| `PUT /v1/sessions/{id}/documents/{step_id}` | member+ | save an edit: `body`, `base_version` (409 if someone saved since) |
+| `GET /v1/sessions/{id}/documents/{step_id}/versions/{n}` | member | an older version |
+
+`GET /v1/sessions/{id}` also returns `step_states` and `documents`. The event
+stream adds `step` and `document` events.
 
 ### Roles
 

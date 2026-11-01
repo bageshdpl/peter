@@ -1,32 +1,44 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { api, atLeast, formatTime, type Project, type ValidationSession, type ValidationType } from "../api";
+import { Link, useParams, useSearchParams } from "react-router-dom";
+import {
+  api, atLeast, formatTime,
+  type DocumentSummary, type Project, type StepState, type StepStatus, type ValidationSession, type ValidationType,
+} from "../api";
 import { useSession } from "../App";
+import { DocumentPanel } from "../document";
+import { useSessionEvents } from "../events";
 import { ObservationPanel } from "../observe";
 import { messageOf, Notice } from "../ui";
 
 interface Loaded {
   session: ValidationSession;
   type: ValidationType | null;
+  step_states: StepState[];
+  documents: DocumentSummary[];
 }
+
+const STATUS_LABEL: Record<StepStatus, string> = {
+  not_started: "Not started",
+  in_progress: "In progress",
+  reviewed: "Reviewed",
+  skipped: "Skipped",
+};
 
 export default function SessionPage() {
   const { id } = useParams<{ id: string }>();
   const me = useSession()!;
+  const [search, setSearch] = useSearchParams();
   const [data, setData] = useState<Loaded | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [title, setTitle] = useState("");
+  const events = useSessionEvents(id!);
 
   const load = useCallback(async () => {
     try {
-      const [d, p] = await Promise.all([
-        api<Loaded>("GET", `/v1/sessions/${id}`),
-        api<{ projects: Project[] }>("GET", "/v1/projects"),
-      ]);
+      const d = await api<Loaded>("GET", `/v1/sessions/${id}`);
       setData(d);
-      setTitle(d.session.title);
-      setProjects(p.projects);
+      setTitle((t) => t || d.session.title);
       setError(null);
     } catch (err) {
       setError(messageOf(err));
@@ -34,8 +46,14 @@ export default function SessionPage() {
   }, [id]);
 
   useEffect(() => {
+    setTitle("");
     load();
+    api<{ projects: Project[] }>("GET", "/v1/projects").then((p) => setProjects(p.projects)).catch(() => {});
   }, [load]);
+
+  // Step and document changes made elsewhere (another person, a finished draft).
+  const { subscribe } = events;
+  useEffect(() => subscribe((name) => (name === "step" || name === "document" || name === "open") && load()), [subscribe, load]);
 
   async function save(body: Record<string, unknown>) {
     try {
@@ -48,9 +66,10 @@ export default function SessionPage() {
     }
   }
 
-  async function setArchived(archive: boolean) {
+  async function act(fn: () => Promise<unknown>) {
     try {
-      setData(await api<Loaded>("POST", `/v1/sessions/${id}/${archive ? "archive" : "restore"}`));
+      await fn();
+      await load();
     } catch (err) {
       setError(messageOf(err));
     }
@@ -66,12 +85,29 @@ export default function SessionPage() {
   }
 
   const { session, type } = data;
+  const steps = type?.steps ?? [];
   const archived = session.archived_at !== null;
   const canWrite = atLeast(me.workspace.role, "member") && !archived;
-  const currentIndex = type?.steps.findIndex((s) => s.id === session.current_step) ?? -1;
+  // The step on screen: from the address if set, else the session's current step.
+  const viewing = steps.find((s) => s.id === search.get("step")) ?? steps.find((s) => s.id === session.current_step) ?? steps[0];
+  const index = steps.findIndex((s) => s.id === viewing?.id);
+  const statusOf = (stepId: string): StepStatus => data.step_states.find((s) => s.step_id === stepId)?.status ?? "not_started";
+  const docOf = (stepId: string) => data.documents.find((d) => d.step_id === stepId);
+  const done = steps.filter((s) => ["reviewed", "skipped"].includes(statusOf(s.id))).length;
+
+  function goTo(stepId: string) {
+    setSearch({ step: stepId }, { replace: false });
+    window.scrollTo({ top: 0 });
+    if (canWrite && stepId !== session.current_step) {
+      act(() => api("POST", `/v1/sessions/${id}/current`, { step_id: stepId }));
+    }
+  }
+
+  const setStatus = (status: StepStatus) =>
+    act(() => api("PUT", `/v1/sessions/${id}/steps/${viewing!.id}`, { status }));
 
   return (
-    <div className="page">
+    <div className="page wide">
       <nav className="crumbs">
         <Link to="/">Projects</Link>
         {session.project_id && <> / <Link to={`/projects/${session.project_id}`}>{session.project_name}</Link></>}
@@ -96,61 +132,116 @@ export default function SessionPage() {
           )}
           <p className="muted small">Started by {session.created_by_name} on {formatTime(session.created_at)}</p>
         </div>
-        {atLeast(me.workspace.role, "member") && (
-          <button className="btn ghost" onClick={() => setArchived(!archived)}>{archived ? "Restore" : "Archive"}</button>
-        )}
+        <div className="head-actions">
+          <label className="field compact">
+            <span className="field-label">Project</span>
+            <select value={session.project_id ?? ""} disabled={!canWrite} onChange={(e) => save({ project_id: e.target.value || null })}>
+              <option value="">Unfiled</option>
+              {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              {session.project_id && !projects.some((p) => p.id === session.project_id) && (
+                <option value={session.project_id}>{session.project_name}</option>
+              )}
+            </select>
+          </label>
+          {atLeast(me.workspace.role, "member") && (
+            <button className="btn ghost" onClick={() => act(() => api("POST", `/v1/sessions/${id}/${archived ? "restore" : "archive"}`))}>
+              {archived ? "Restore" : "Archive"}
+            </button>
+          )}
+        </div>
       </header>
 
       {archived && <Notice kind="error">This session is archived and read-only.</Notice>}
       {error && <Notice kind="error">{error}</Notice>}
 
-      <section className="card">
-        <label className="field compact inline-field">
-          <span className="field-label">Project</span>
-          <select
-            value={session.project_id ?? ""}
-            disabled={!canWrite}
-            onChange={(e) => save({ project_id: e.target.value || null })}
-          >
-            <option value="">Unfiled</option>
-            {projects.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-            {/* Keep showing the current project even if it is archived. */}
-            {session.project_id && !projects.some((p) => p.id === session.project_id) && (
-              <option value={session.project_id}>{session.project_name}</option>
-            )}
-          </select>
-        </label>
-      </section>
+      <div className="workspace">
+        <aside className="step-rail" aria-label="Steps">
+          <div className="rail-head">
+            <span className="field-label">Steps</span>
+            <span className="muted small">{done} of {steps.length} done</span>
+          </div>
+          <div className="progress" aria-hidden><span style={{ width: `${(done / Math.max(steps.length, 1)) * 100}%` }} /></div>
+          <ol>
+            {steps.map((s, i) => {
+              const status = statusOf(s.id);
+              const doc = docOf(s.id);
+              return (
+                <li key={s.id}>
+                  <button className={`rail-step ${status}${s.id === viewing?.id ? " active" : ""}`} onClick={() => goTo(s.id)}
+                    aria-current={s.id === viewing?.id ? "step" : undefined}>
+                    <span className="rail-mark" aria-label={STATUS_LABEL[status]}>
+                      {status === "reviewed" ? "✓" : status === "skipped" ? "–" : i + 1}
+                    </span>
+                    <span className="rail-text">
+                      <span>{s.label}</span>
+                      {doc && (
+                        <span className={`rail-doc ${doc.status}`}>
+                          {doc.status === "drafting" ? "Drafting…" : doc.status === "failed" ? "Draft failed" : `Draft v${doc.current_version}`}
+                        </span>
+                      )}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+        </aside>
 
-      <ObservationPanel
-        sessionId={session.id}
-        sessionTitle={session.title}
-        userId={me.user.id}
-        workspaceId={me.workspace.id}
-        canRecord={canWrite}
-      />
-
-      <section className="card">
-        <h2>Steps</h2>
-        <p className="muted">
-          Guided steps and AI drafting arrive in the next milestones. For now this shows the path the session will
-          follow.
-        </p>
-        <ol className="steps">
-          {type?.steps.map((s, i) => (
-            <li key={s.id} className={i === currentIndex ? "current" : i < currentIndex ? "done" : ""}>
-              <span className="step-num" aria-hidden>{i + 1}</span>
-              <div>
-                <strong>{s.label}</strong>
-                {i === currentIndex && <span className="here">Current</span>}
-                <p className="muted">{s.summary}</p>
+        {viewing && (
+          <div className="step-main">
+            <section className="card step-head">
+              <div className="step-title">
+                <p className="eyebrow">Step {index + 1} of {steps.length}</p>
+                <h2>{viewing.label}</h2>
+                <p className="muted">{viewing.summary}</p>
               </div>
-            </li>
-          ))}
-        </ol>
-      </section>
+              <div className="step-actions">
+                <span className={`pill ${statusOf(viewing.id)}`}>{STATUS_LABEL[statusOf(viewing.id)]}</span>
+                {canWrite && (
+                  statusOf(viewing.id) === "reviewed" || statusOf(viewing.id) === "skipped" ? (
+                    <button className="btn ghost" onClick={() => setStatus("in_progress")}>Reopen</button>
+                  ) : (
+                    <>
+                      <button className="btn ghost" onClick={() => setStatus("skipped")}>Skip</button>
+                      <button className="btn primary" onClick={() => setStatus("reviewed")}>Mark reviewed</button>
+                    </>
+                  )
+                )}
+              </div>
+            </section>
+
+            {viewing.id === "observe" && (
+              <ObservationPanel
+                sessionId={session.id}
+                sessionTitle={session.title}
+                userId={me.user.id}
+                workspaceId={me.workspace.id}
+                canRecord={canWrite}
+                events={events}
+              />
+            )}
+
+            <DocumentPanel
+              sessionId={session.id}
+              step={viewing}
+              steps={steps}
+              projectId={session.project_id}
+              canWrite={canWrite}
+              events={events}
+              onGoToStep={goTo}
+            />
+
+            <div className="step-nav">
+              <button className="btn ghost" disabled={index <= 0} onClick={() => goTo(steps[index - 1].id)}>
+                ← {index > 0 ? steps[index - 1].label : "Back"}
+              </button>
+              <button className="btn ghost" disabled={index >= steps.length - 1} onClick={() => goTo(steps[index + 1].id)}>
+                {index < steps.length - 1 ? steps[index + 1].label : "Next"} →
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

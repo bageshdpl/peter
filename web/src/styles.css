@@ -280,3 +280,93 @@ textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
   .obs-kind { min-width: 0; }
   .thumb { width: 96px; height: 60px; }
 }
+
+/* M3/M4: guided session workspace and documents */
+.page.wide { max-width: 1240px; }
+.workspace { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 1.25rem; align-items: start; }
+.workspace > * { min-width: 0; }
+.step-rail { position: sticky; top: 1rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 0.9rem; }
+.rail-head { display: flex; justify-content: space-between; align-items: baseline; }
+.progress { height: 4px; background: var(--surface-2); border-radius: 4px; margin: 0.5rem 0 0.75rem; overflow: hidden; }
+.progress span { display: block; height: 100%; background: var(--accent); transition: width 0.3s; }
+.step-rail ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.rail-step {
+  width: 100%; display: flex; gap: 0.6rem; align-items: flex-start; text-align: left; font: inherit; font-size: 0.9rem;
+  background: none; border: 0; border-radius: 8px; padding: 0.45rem 0.5rem; cursor: pointer; color: var(--text);
+}
+.rail-step:hover { background: var(--surface-2); }
+.rail-step.active { background: var(--accent-soft); }
+.rail-mark {
+  flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 0.75rem; font-weight: 700;
+  background: var(--surface-2); color: var(--muted); border: 1.5px solid transparent;
+}
+.rail-step.in_progress .rail-mark { border-color: var(--accent); color: var(--accent); background: var(--surface); }
+.rail-step.reviewed .rail-mark { background: var(--accent); color: var(--accent-text); }
+.rail-step.skipped .rail-mark { background: var(--surface-2); color: var(--muted); }
+.rail-step.skipped .rail-text > span:first-child { color: var(--muted); text-decoration: line-through; }
+.rail-text { display: flex; flex-direction: column; min-width: 0; }
+.rail-doc { font-size: 0.75rem; color: var(--accent); font-weight: 600; }
+.rail-doc.failed { color: var(--danger); }
+.rail-doc.drafting { color: var(--muted); }
+
+.step-main { display: flex; flex-direction: column; gap: 1.25rem; min-width: 0; }
+.step-head { display: flex; justify-content: space-between; gap: 1rem; align-items: flex-start; flex-wrap: wrap; }
+.step-head h2 { font-size: 1.3rem; margin: 0 0 0.25rem; }
+.step-title { min-width: 0; flex: 1; }
+.step-actions { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+.pill { font-size: 0.75rem; font-weight: 650; padding: 0.2rem 0.6rem; border-radius: 999px; background: var(--surface-2); color: var(--muted); white-space: nowrap; }
+.pill.in_progress { background: var(--accent-soft); color: var(--accent); }
+.pill.reviewed { background: var(--accent); color: var(--accent-text); }
+.step-nav { display: flex; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; }
+.step-nav .btn { max-width: 48%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.draft-bar { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: flex-end; background: var(--surface-2); border-radius: 8px; padding: 0.75rem; margin-bottom: 1rem; }
+.draft-bar select { min-width: 240px; }
+.draft-bar .instructions { flex-basis: 100%; margin: 0; }
+.draft-bar p { flex-basis: 100%; margin: 0; }
+.drafting { display: flex; align-items: center; gap: 0.6rem; padding: 0.75rem; border-radius: 8px; background: var(--accent-soft); color: var(--accent); font-weight: 550; margin-bottom: 1rem; }
+.spinner { width: 16px; height: 16px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; flex: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.editor textarea { width: 100%; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.88rem; line-height: 1.5; }
+
+.cite-summary { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; font-size: 0.85rem; color: var(--muted); padding-bottom: 0.75rem; border-bottom: 1px solid var(--border); margin-bottom: 0.5rem; }
+.cite-summary .warn { color: #b54708; font-weight: 600; }
+.cite-summary .bad { color: var(--danger); font-weight: 600; }
+
+.doc-body { line-height: 1.6; overflow-wrap: break-word; }
+.doc-body h2 { font-size: 1.25rem; margin: 1.2rem 0 0.5rem; }
+.doc-body h3 { font-size: 1.08rem; margin: 1.1rem 0 0.4rem; }
+.doc-body h4, .doc-body h5 { font-size: 0.98rem; margin: 1rem 0 0.35rem; }
+.doc-body p { margin: 0.5rem 0; }
+.doc-body ul, .doc-body ol { margin: 0.4rem 0; padding-left: 1.4rem; }
+.doc-body blockquote { margin: 0.6rem 0; padding: 0.5rem 0.8rem; border-left: 3px solid var(--accent); background: var(--surface-2); border-radius: 0 6px 6px 0; }
+.doc-body code { background: var(--surface-2); padding: 0.05rem 0.3rem; border-radius: 4px; }
+.doc-table { font-size: 0.88rem; margin: 0.6rem 0; }
+.doc-table td:first-child { white-space: nowrap; }
+.doc-table th { text-transform: none; letter-spacing: 0; font-size: 0.82rem; color: var(--text); background: var(--surface-2); }
+.doc-table th, .doc-table td { border: 1px solid var(--border); vertical-align: top; }
+.cite {
+  font: inherit; font-size: 0.72rem; font-weight: 700; line-height: 1; padding: 0.15rem 0.35rem; margin: 0 0.1rem; border-radius: 4px;
+  border: 1px solid transparent; cursor: pointer; vertical-align: 0.1em; white-space: nowrap;
+}
+.cite-o { background: var(--accent-soft); color: var(--accent); }
+.cite-s { background: #eef4ff; color: #3538cd; }
+.cite-d { background: var(--surface-2); color: var(--text); border-color: var(--border); font-weight: 600; }
+.cite.missing { background: var(--danger-soft); color: var(--danger); cursor: help; text-decoration: line-through; }
+.gap { background: #fef0c7; color: #93370d; border-radius: 4px; padding: 0.05rem 0.35rem; font-size: 0.88em; font-weight: 550; }
+@media (prefers-color-scheme: dark) {
+  .cite-s { background: #1f2a4d; color: #a4bcfd; }
+  .gap { background: #4e2f0b; color: #fedf89; }
+  .cite-summary .warn { color: #fdb022; }
+}
+
+@media (max-width: 960px) {
+  .workspace { grid-template-columns: 1fr; }
+  .step-rail { position: static; }
+  .step-rail ol { flex-direction: row; overflow-x: auto; gap: 0.25rem; padding-bottom: 0.25rem; }
+  .rail-step { width: auto; white-space: nowrap; }
+  .draft-bar select { min-width: 0; width: 100%; }
+  .draft-bar .field { flex: 1 1 100%; }
+  .step-head { flex-direction: column; }
+  .step-title { flex: none; width: 100%; }
+}

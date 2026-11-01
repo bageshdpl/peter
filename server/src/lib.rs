@@ -1,8 +1,12 @@
 //! Peter API server.
 
+pub mod ai;
 pub mod auth;
 pub mod catalog;
+pub mod drafting;
 pub mod error;
+pub mod extract;
+pub mod prompts;
 pub mod routes;
 pub mod security;
 pub mod state;

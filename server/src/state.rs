@@ -19,6 +19,7 @@ pub struct Config {
     /// Where uploaded files are kept.
     pub data_dir: std::path::PathBuf,
     pub max_upload_bytes: usize,
+    pub ai: crate::ai::AiConfig,
 }
 
 impl Config {
@@ -38,12 +39,15 @@ impl Config {
             allow_signup: var("PETER_ALLOW_SIGNUP", "true") != "false",
             data_dir: var("PETER_DATA_DIR", "peter-data").into(),
             max_upload_bytes: num("PETER_MAX_UPLOAD_MB", 25) as usize * 1024 * 1024,
+            ai: crate::ai::AiConfig::from_env(),
         }
     }
 
     pub fn for_tests() -> Self {
         let data_dir = std::env::temp_dir().join(format!("peter-test-{}", uuid::Uuid::new_v4().simple()));
-        Self { database_url: "sqlite::memory:".into(), data_dir, max_upload_bytes: 1024 * 1024, ..Self::from_env() }
+        // Tests never use real keys; they point providers at local fakes when needed.
+        let ai = crate::ai::AiConfig { openrouter_key: None, gemini_key: None, sample: true, ..crate::ai::AiConfig::from_env() };
+        Self { database_url: "sqlite::memory:".into(), data_dir, max_upload_bytes: 1024 * 1024, ai, ..Self::from_env() }
     }
 }
 
@@ -98,6 +102,10 @@ impl AppState {
         let dummy_hash = crate::security::hash_password("peter-dummy-password")
             .map_err(|_| BoxError::from("could not hash the dummy password"))?;
         tokio::fs::create_dir_all(config.data_dir.join("screenshots")).await?;
+        // A draft cannot survive a restart; say so rather than leave it spinning.
+        sqlx::query("UPDATE documents SET status = 'failed', error = 'Drafting stopped because the server restarted. Draft again.' WHERE status = 'drafting'")
+            .execute(&db)
+            .await?;
         let (events, _) = tokio::sync::broadcast::channel(512);
         Ok(Self { db, config: Arc::new(config), mailer, dummy_hash: Arc::new(dummy_hash), events })
     }

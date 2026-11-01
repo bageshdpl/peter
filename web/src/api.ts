@@ -85,6 +85,37 @@ export interface Observation {
   created_at: number;
 }
 
+export type StepStatus = "not_started" | "in_progress" | "reviewed" | "skipped";
+export interface StepState { step_id: string; status: StepStatus; updated_by_name: string; updated_at: number }
+export interface DocumentSummary { step_id: string; title: string; status: "drafting" | "ready" | "failed"; current_version: number; updated_at: number }
+export interface Provider { id: string; name: string; model: string; is_ai: boolean }
+export interface Citations {
+  cited?: string[];
+  unknown?: string[];
+  gaps?: number;
+  sources?: Record<string, { id: string; filename: string }>;
+}
+export interface DocumentVersion {
+  version: number;
+  body: string;
+  origin: "ai" | "person";
+  provider: string | null;
+  model: string | null;
+  prompt_tokens: number | null;
+  completion_tokens: number | null;
+  citations: Citations;
+  observations: Record<string, { id: string; seq: number; kind: string; label: string; has_screenshot: boolean }>;
+  created_by_name: string;
+  created_at: number;
+}
+export interface DocumentView {
+  document: { id: string; step_id: string; title: string; status: DocumentSummary["status"]; error: string | null; current_version: number } | null;
+  current?: DocumentVersion | null;
+  versions?: { version: number; origin: string; provider: string | null; model: string | null; created_by_name: string; created_at: number }[];
+  title: string | null;
+  draftable: boolean;
+}
+
 export class ApiError extends Error {
   constructor(public status: number, public code: string, message: string) {
     super(message);

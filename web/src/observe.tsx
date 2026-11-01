@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, fetchBlobUrl, followEvents, type Observation } from "./api";
+import { api, fetchBlobUrl, type Observation } from "./api";
+import type { SessionEvents } from "./events";
 import { messageOf, Notice } from "./ui";
 
 // ---------- Talking to the Peter Observer extension ----------
@@ -104,11 +105,12 @@ export function ObservationPanel(props: {
   userId: string;
   workspaceId: string;
   canRecord: boolean;
+  events: SessionEvents;
 }) {
-  const { sessionId, sessionTitle, userId, workspaceId, canRecord } = props;
+  const { sessionId, sessionTitle, userId, workspaceId, canRecord, events } = props;
+  const { live, subscribe } = events;
   const ext = useExtension();
   const [steps, setSteps] = useState<Observation[]>([]);
-  const [live, setLive] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [zoom, setZoom] = useState<Observation | null>(null);
@@ -122,33 +124,22 @@ export function ObservationPanel(props: {
     }
   }, [base]);
 
-  // Load the steps, then follow new ones live. Each (re)connection reloads,
-  // so nothing is missed while the stream was down.
+  // Follow new steps live. Each (re)connection reloads, so nothing is missed
+  // while the stream was down.
   useEffect(() => {
-    const abort = new AbortController();
-    followEvents(
-      `/v1/sessions/${sessionId}/events`,
-      {
-        onOpen: () => {
-          setLive(true);
-          reload();
-        },
-        onEvent: (name, data) => {
-          if (name === "observation") {
-            const o = data as Observation;
-            setSteps((prev) => (prev.some((p) => p.id === o.id) ? prev : [...prev, o].sort((a, b) => a.seq - b.seq)));
-          } else if (name === "observation_removed") {
-            const { id } = data as { id: string };
-            setSteps((prev) => prev.filter((p) => p.id !== id));
-          } else if (name === "resync") {
-            reload();
-          }
-        },
-      },
-      abort.signal,
-    ).finally(() => setLive(false));
-    return () => abort.abort();
-  }, [sessionId, reload]);
+    reload();
+    return subscribe((name, data) => {
+      if (name === "open" || name === "resync") {
+        reload();
+      } else if (name === "observation") {
+        const o = data as Observation;
+        setSteps((prev) => (prev.some((p) => p.id === o.id) ? prev : [...prev, o].sort((a, b) => a.seq - b.seq)));
+      } else if (name === "observation_removed") {
+        const { id } = data as { id: string };
+        setSteps((prev) => prev.filter((p) => p.id !== id));
+      }
+    });
+  }, [subscribe, reload]);
 
   const status = ext.status;
   // The extension is usable here only if it is signed in as this person, in this workspace.
@@ -300,7 +291,7 @@ function Thumb({ path, onOpen }: { path: string; onOpen: () => void }) {
   );
 }
 
-function Zoom({ path, title, onClose }: { path: string; title: string; onClose: () => void }) {
+export function Zoom({ path, title, onClose }: { path: string; title: string; onClose: () => void }) {
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
     let u: string | null = null;

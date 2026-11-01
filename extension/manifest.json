@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Peter Observer",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "Records the system you are validating into a Peter session: each step, what was typed, and screenshots.",
   "minimum_chrome_version": "116",
   "permissions": [

@@ -1,3 +1,4 @@
+mod ai_settings;
 mod audit;
 mod auth;
 mod controls;
@@ -125,6 +126,10 @@ pub fn router(max_upload_bytes: usize) -> Router<AppState> {
         .route("/notifications", get(sharing::notifications))
         .route("/notifications/unread", get(sharing::unread))
         .route("/notifications/read", post(sharing::mark_read))
+        .route("/workspace/ai", get(ai_settings::get))
+        .route("/workspace/ai/usage", get(ai_settings::usage))
+        .route("/workspace/ai/{provider}", axum::routing::put(ai_settings::set_key).delete(ai_settings::remove_key))
+        .route("/workspace/ai/{provider}/check", post(ai_settings::check))
         .route("/meta", get(meta::meta))
         .route("/extension/download", get(meta::extension_zip))
         .fallback(|| async { AppError::not_found("No such API endpoint.") })

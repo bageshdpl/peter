@@ -501,3 +501,7 @@ textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 .notification-list li.unread .text { font-weight: 600; }
 .notification-list li.unread .kind { color: var(--accent); }
 @media (max-width: 640px) { .notification { grid-template-columns: 1fr; gap: 0.2rem; } .share-list li { flex-direction: column; align-items: flex-start; } }
+
+/* AI and usage */
+h3.sub { font-size: 0.95rem; margin: 1.1rem 0 0.4rem; }
+.error-text { color: var(--danger); font-size: 0.8rem; }

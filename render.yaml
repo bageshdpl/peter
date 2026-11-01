@@ -9,6 +9,14 @@ services:
     healthCheckPath: /healthz
     autoDeploy: true
     envVars:
+      # Encrypts workspace AI keys in the database. Render makes one up once
+      # and keeps it; never change it, or saved keys can no longer be read.
+      - key: PETER_SECRET_KEY
+        generateValue: true
+      # The most tokens each workspace may use per month on your OpenRouter
+      # key. Workspaces can add their own key in "AI and usage" instead.
+      - key: PETER_SHARED_AI_MONTHLY_TOKENS
+        value: "300000"
       - key: PETER_ADMIN_EMAIL
         sync: false
       - key: OPENROUTER_API_KEY

@@ -216,6 +216,25 @@ one and tells them.
 
 Shares, review requests and their removal are in the audit trail.
 
+## AI keys and usage
+
+Open **AI and usage** in the sidebar.
+
+- **The workspace's own key.** An admin can add the workspace's own
+  OpenRouter or Gemini key, and optionally a model. Drafts in that workspace
+  then use it, so the workspace pays its provider directly. The key is
+  encrypted in the database and never shown again; only its last four
+  characters are. **Check key** tries it without spending anything.
+- **The server's key.** Workspaces without their own key use the server's
+  (`OPENROUTER_API_KEY`, `GEMINI_API_KEY`). `PETER_SHARED_AI_MONTHLY_TOKENS`
+  limits how many tokens each workspace may use on it per month (no limit if
+  unset), and `PETER_SHARED_AI=false` turns sharing off.
+- **Usage.** Admins see every AI draft, whether it worked or not: tokens, and
+  the cost OpenRouter reports, by key, by person and one by one.
+- **The secret key.** Workspace keys are encrypted with `PETER_SECRET_KEY`.
+  Without it, Peter makes `secret.key` in its data folder. Keep it with the
+  data and never change it, or saved keys can no longer be read.
+
 ## Security
 
 Open **Security** in the sidebar.
@@ -450,6 +469,16 @@ other calls answer `403` with code `mfa_setup_required`.
 | `GET /v1/notifications` | viewer | latest 100 (`?unread=true` for unread only) and the unread count |
 | `GET /v1/notifications/unread` | viewer | the unread count |
 | `POST /v1/notifications/read` | viewer | `ids`, or `all: true` |
+
+## API (AI keys and usage)
+
+| Method and path | Who | What |
+| --- | --- | --- |
+| `GET /v1/workspace/ai` | viewer | which key each provider uses (never the key), and the shared allowance |
+| `PUT /v1/workspace/ai/{openrouter or gemini}` | admin | `key` and/or `model` |
+| `DELETE /v1/workspace/ai/{provider}` | admin | remove the workspace's key |
+| `POST /v1/workspace/ai/{provider}/check` | admin | try the key in use, at no cost |
+| `GET /v1/workspace/ai/usage?days=30` | admin | totals by key and by person, and the latest 50 calls |
 
 ### Roles
 

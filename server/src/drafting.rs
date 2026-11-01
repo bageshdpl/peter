@@ -444,10 +444,20 @@ async fn draft(state: &AppState, job: &DraftJob) -> Result<(i64, String, Value),
     let spec = prompts::spec(&job.step_id).ok_or("This step has no document to draft.")?;
     let evidence = gather(state, &job.session_id, &job.step_id).await?;
     let completion = if job.provider == "sample" {
-        ai::Completion { text: sample_draft(&evidence, &spec), model: "peter-sample".into(), prompt_tokens: None, completion_tokens: None }
+        ai::Completion {
+            text: sample_draft(&evidence, &spec),
+            model: "peter-sample".into(),
+            prompt_tokens: None,
+            completion_tokens: None,
+            cost_usd: None,
+        }
     } else {
         let user = user_prompt(&evidence, &spec, &job.extra);
-        ai::complete(&state.config.ai, &job.provider, Prompt { system: prompts::SYSTEM, user: &user }).await?
+        let effective = crate::workspace_ai::effective(state, &job.workspace_id).await?;
+        let source = effective.source(&job.provider).ok_or("That AI provider has no key for this workspace.")?;
+        let result = ai::complete(&effective.config, &job.provider, Prompt { system: prompts::SYSTEM, user: &user }).await;
+        crate::workspace_ai::record(state, job, source, &result).await;
+        result?
     };
     let body = unwrap_fence(&completion.text);
     let known = known_ids(&evidence);

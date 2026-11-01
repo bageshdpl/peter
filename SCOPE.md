@@ -91,7 +91,7 @@ Each module is decided on its own: in, later, or out.
 - Two-factor sign-in, password reset, change password.
 - Audit trail of every change.
 - Security settings, usage summary.
-- Bring-your-own AI key.
+- Bring-your-own AI key (done), with a usage summary (done).
 - SSO (OIDC, SAML), SCIM provisioning.
 - Billing (Stripe), seats, trial.
 - Support requests, feedback, release notes, help videos, tutorial with a practice system.

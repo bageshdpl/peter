@@ -12,12 +12,14 @@ pub mod mfa;
 pub mod notify;
 pub mod prompts;
 pub mod routes;
+pub mod secrets;
 pub mod security;
 pub mod standards;
 pub mod storage;
 pub mod state;
 pub mod throttle;
 pub mod trace;
+pub mod workspace_ai;
 
 use axum::{
     Router,

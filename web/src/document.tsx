@@ -6,15 +6,11 @@ import { Zoom } from "./observe";
 import { CommentsPanel, ExportButtons, SignaturePanel } from "./review";
 import { messageOf, Notice } from "./ui";
 
-let providersCache: Promise<Provider[]> | null = null;
+// Fetched each time a document opens: an admin may have added a workspace key.
 function useProviders() {
   const [providers, setProviders] = useState<Provider[] | null>(null);
   useEffect(() => {
-    providersCache ??= api<{ providers: Provider[] }>("GET", "/v1/ai/providers").then((r) => r.providers);
-    providersCache.then(setProviders).catch(() => {
-      providersCache = null;
-      setProviders([]);
-    });
+    api<{ providers: Provider[] }>("GET", "/v1/ai/providers").then((r) => setProviders(r.providers)).catch(() => setProviders([]));
   }, []);
   return providers;
 }
@@ -227,7 +223,7 @@ export function DocumentPanel(props: {
                 <span className="field-label">Draft with</span>
                 <select value={provider} onChange={(e) => setProvider(e.target.value)} disabled={drafting || busy}>
                   {providers?.map((p) => (
-                    <option key={p.id} value={p.id}>{p.is_ai ? `${p.name} · ${p.model}` : p.name}</option>
+                    <option key={p.id} value={p.id}>{p.is_ai ? `${p.name} · ${p.model}${p.key_source === "workspace" ? " (workspace key)" : ""}` : p.name}</option>
                   ))}
                 </select>
               </label>

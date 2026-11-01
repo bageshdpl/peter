@@ -17,6 +17,10 @@ pub struct AiConfig {
     /// Offers the offline sample drafter (no AI), for trying Peter without a key.
     pub sample: bool,
     pub timeout_secs: u64,
+    /// Whether workspaces without their own key may use the server's keys.
+    pub shared: bool,
+    /// The most tokens a workspace may use each month on the server's keys.
+    pub shared_monthly_tokens: Option<i64>,
 }
 
 impl AiConfig {
@@ -32,6 +36,8 @@ impl AiConfig {
                 .unwrap_or_else(|| "https://generativelanguage.googleapis.com/v1beta".into()),
             sample: var("PETER_AI_SAMPLE").map(|v| v != "false").unwrap_or(true),
             timeout_secs: var("PETER_AI_TIMEOUT_SECS").and_then(|v| v.parse().ok()).unwrap_or(180),
+            shared: var("PETER_SHARED_AI").map(|v| v != "false").unwrap_or(true),
+            shared_monthly_tokens: var("PETER_SHARED_AI_MONTHLY_TOKENS").and_then(|v| v.parse().ok()).filter(|n: &i64| *n > 0),
         }
     }
 
@@ -64,6 +70,8 @@ pub struct Completion {
     pub model: String,
     pub prompt_tokens: Option<i64>,
     pub completion_tokens: Option<i64>,
+    /// What the provider says the call cost, in US dollars (OpenRouter only).
+    pub cost_usd: Option<f64>,
 }
 
 pub struct Prompt<'a> {
@@ -103,6 +111,8 @@ async fn openrouter(config: &AiConfig, prompt: Prompt<'_>) -> Result<Completion,
     let body = json!({
         "model": config.openrouter_model,
         "temperature": 0.2,
+        // Asks OpenRouter to report the call's cost.
+        "usage": { "include": true },
         "messages": [
             { "role": "system", "content": prompt.system },
             { "role": "user", "content": prompt.user },
@@ -136,6 +146,7 @@ async fn openrouter(config: &AiConfig, prompt: Prompt<'_>) -> Result<Completion,
         model: v.get("model").and_then(Value::as_str).unwrap_or(&config.openrouter_model).to_string(),
         prompt_tokens: v.pointer("/usage/prompt_tokens").and_then(Value::as_i64),
         completion_tokens: v.pointer("/usage/completion_tokens").and_then(Value::as_i64),
+        cost_usd: v.pointer("/usage/cost").and_then(Value::as_f64),
     })
 }
 
@@ -177,5 +188,52 @@ async fn gemini(config: &AiConfig, prompt: Prompt<'_>) -> Result<Completion, Str
         model: v.get("modelVersion").and_then(Value::as_str).unwrap_or(&config.gemini_model).to_string(),
         prompt_tokens: v.pointer("/usageMetadata/promptTokenCount").and_then(Value::as_i64),
         completion_tokens: v.pointer("/usageMetadata/candidatesTokenCount").and_then(Value::as_i64),
+        cost_usd: None,
     })
+}
+
+/// Checks a key without spending anything: OpenRouter's key endpoint, or
+/// Gemini's model list. Returns a short description of what was found.
+pub async fn check_key(config: &AiConfig, provider: &str) -> Result<String, String> {
+    let http = client(config)?;
+    match provider {
+        "openrouter" => {
+            let key = config.openrouter_key.as_deref().ok_or("No OpenRouter key.")?;
+            let res = http
+                .get(format!("{}/key", config.openrouter_base.trim_end_matches('/')))
+                .bearer_auth(key)
+                .send()
+                .await
+                .map_err(|e| format!("Could not reach OpenRouter: {e}"))?;
+            let status = res.status();
+            let text = res.text().await.unwrap_or_default();
+            if !status.is_success() {
+                return Err(provider_error(status, &text));
+            }
+            let v: Value = serde_json::from_str(&text).unwrap_or_default();
+            let usage = v.pointer("/data/usage").and_then(Value::as_f64);
+            let limit = v.pointer("/data/limit").and_then(Value::as_f64);
+            Ok(match (usage, limit) {
+                (Some(u), Some(l)) => format!("The key works. Used ${u:.2} of its ${l:.2} limit."),
+                (Some(u), None) => format!("The key works. Used ${u:.2} so far, with no limit set."),
+                _ => "The key works.".into(),
+            })
+        }
+        "gemini" => {
+            let key = config.gemini_key.as_deref().ok_or("No Gemini key.")?;
+            let res = http
+                .get(format!("{}/models?pageSize=1", config.gemini_base.trim_end_matches('/')))
+                .header("x-goog-api-key", key)
+                .send()
+                .await
+                .map_err(|e| format!("Could not reach Gemini: {}", e.without_url()))?;
+            let status = res.status();
+            let text = res.text().await.unwrap_or_default();
+            if !status.is_success() {
+                return Err(provider_error(status, &text));
+            }
+            Ok("The key works.".into())
+        }
+        _ => Err(format!("Unknown AI provider \"{provider}\".")),
+    }
 }

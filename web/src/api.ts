@@ -90,7 +90,7 @@ export interface Observation {
 export type StepStatus = "not_started" | "in_progress" | "reviewed" | "skipped";
 export interface StepState { step_id: string; status: StepStatus; updated_by_name: string; updated_at: number }
 export interface DocumentSummary { step_id: string; title: string; status: "drafting" | "ready" | "failed"; current_version: number; updated_at: number }
-export interface Provider { id: string; name: string; model: string; is_ai: boolean }
+export interface Provider { id: string; name: string; model: string; is_ai: boolean; key_source?: "workspace" | "server" | null }
 export interface Citations {
   cited?: string[];
   unknown?: string[];

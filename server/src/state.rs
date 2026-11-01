@@ -93,6 +93,8 @@ pub struct AppState {
     /// sign-in takes the same time whether or not the account exists.
     pub dummy_hash: Arc<String>,
     pub events: tokio::sync::broadcast::Sender<SessionEvent>,
+    /// Encrypts values kept in the database, such as workspace AI keys.
+    pub secret: Arc<crate::secrets::Secret>,
 }
 
 impl AppState {
@@ -117,7 +119,8 @@ impl AppState {
             .execute(&db)
             .await?;
         let (events, _) = tokio::sync::broadcast::channel(512);
-        Ok(Self { db, config: Arc::new(config), mailer, dummy_hash: Arc::new(dummy_hash), events })
+        let secret = Arc::new(crate::secrets::Secret::load(&config.data_dir).await?);
+        Ok(Self { db, config: Arc::new(config), mailer, dummy_hash: Arc::new(dummy_hash), events, secret })
     }
 }
 

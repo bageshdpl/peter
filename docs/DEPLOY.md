@@ -71,6 +71,12 @@ Keep these four values for Step 2. Treat the access keys like passwords.
 
    To use Gemini as well, after the first deploy open the service's
    **Environment** page and add `GEMINI_API_KEY`.
+
+   Two more values are filled in for you: `PETER_SECRET_KEY` (made up by
+   Render; it encrypts workspaces' own AI keys, so never change it) and
+   `PETER_SHARED_AI_MONTHLY_TOKENS` (each workspace may use 300,000 tokens a
+   month on your OpenRouter key; change it to suit, or set
+   `PETER_SHARED_AI=false` so only workspaces with their own key can draft).
 4. Click **Apply**. The first build compiles Peter and takes 10–15 minutes;
    you can watch it under **Logs**. Later deploys are similar.
 5. When it says **Live**, your address is at the top of the service page,
@@ -79,6 +85,10 @@ Keep these four values for Step 2. Treat the access keys like passwords.
 
 Every push to `main` on GitHub redeploys Peter automatically. Your data
 survives redeploys through the backup.
+
+If you deployed before `PETER_SECRET_KEY` was added, check the service's
+**Environment** page after the next deploy. If it is missing, add it yourself
+with any long random text (40 characters or more) and keep it unchanged.
 
 ## Step 3. Set up Peter and invite testers
 

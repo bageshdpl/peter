@@ -59,6 +59,7 @@ export default function Shell() {
             Notifications {unread > 0 && <span className="badge">{unread > 99 ? "99+" : unread}</span>}
           </NavLink>
           <NavLink to="/library">Library</NavLink>
+          <NavLink to="/ai">AI and usage</NavLink>
           <NavLink to="/members">Members</NavLink>
           {isAdmin && <NavLink to="/audit">Audit trail</NavLink>}
           <NavLink to="/settings">Settings</NavLink>

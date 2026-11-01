@@ -142,8 +142,12 @@ pub async fn set_current(
 
 // ---------- M4: documents ----------
 
-pub async fn providers(State(state): State<AppState>, _auth: Auth) -> Json<Value> {
-    Json(json!({ "providers": state.config.ai.providers() }))
+pub async fn providers(State(state): State<AppState>, auth: Auth) -> AppResult<Json<Value>> {
+    let effective = crate::workspace_ai::effective(&state, &auth.workspace_id).await.map_err(|e| {
+        tracing::error!(error = %e, "could not read AI settings");
+        AppError::internal()
+    })?;
+    Ok(Json(json!({ "providers": effective.providers() })))
 }
 
 #[derive(Serialize, sqlx::FromRow)]
@@ -311,8 +315,20 @@ pub async fn start_draft(
     let kind = session_type(&state, &auth, &session_id, true).await?;
     check_step(kind, &step_id)?;
     let spec = prompts::spec(&step_id).ok_or_else(|| AppError::bad_request("not_draftable", "This step has no document to draft."))?;
-    if !state.config.ai.providers().iter().any(|p| p.id == body.provider) {
-        return Err(AppError::bad_request("unknown_provider", "That AI provider is not set up on this server."));
+    let effective = crate::workspace_ai::effective(&state, &auth.workspace_id).await.map_err(|e| {
+        tracing::error!(error = %e, "could not read AI settings");
+        AppError::internal()
+    })?;
+    if !effective.providers().iter().any(|p| p.id == body.provider) {
+        return Err(AppError::bad_request("unknown_provider", "That AI provider has no key for this workspace."));
+    }
+    if effective.source(&body.provider) == Some("server")
+        && let Some(limit) = state.config.ai.shared_monthly_tokens
+        && crate::workspace_ai::shared_tokens_this_month(&state, &auth.workspace_id).await? >= limit
+    {
+        return Err(AppError::new(StatusCode::TOO_MANY_REQUESTS, "ai_limit", format!(
+            "This workspace has used its {limit} tokens of shared AI this month. An admin can add the workspace's own key in Settings."
+        )));
     }
     if body.instructions.chars().count() > 2000 {
         return Err(AppError::bad_request("invalid_field", "Keep extra instructions under 2000 characters."));

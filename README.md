@@ -9,9 +9,27 @@ it does and the build plan.
 | Web app (React) | `web/` | sign-in, projects, guided sessions with AI drafts, comments, signatures, exports, members, audit trail, settings |
 | Observer extension | `extension/` | records steps and screenshots into a session ([setup](extension/README.md)) |
 
-**On Windows?** Download the ready-to-run zip from
-[Releases](https://github.com/bageshdpl/peter/releases/latest): no installation
-and no admin rights needed. Step by step: [docs/SETUP-WINDOWS.md](docs/SETUP-WINDOWS.md).
+**Just want to use Peter?** Download the ready-to-run zip for Windows or Mac
+from [Releases](https://github.com/bageshdpl/peter/releases/latest): no
+installation and no admin rights needed. Step by step:
+[Windows](docs/SETUP-WINDOWS.md) · [Mac](docs/SETUP-MAC.md).
+
+### Using Peter from another GitHub account
+
+The repository is private, so another account (for example one linked to a
+different email) needs access before it can download releases or clone:
+
+1. Signed in as the owner (`bageshdpl`), open the repository's
+   **Settings → Collaborators → Add people**, enter the other account's
+   username or email, and choose a role (**Write** to push changes, **Read**
+   only to download and clone).
+2. The other account accepts the invitation from its email or from
+   https://github.com/notifications.
+3. It can then download releases, and clone with
+   `git clone https://github.com/bageshdpl/peter.git`.
+
+Each computer keeps its own Peter data (`peter.db` and `peter-data`); they are
+not synced. Use a different account per person in Peter itself.
 
 ## Get the code
 

@@ -1,7 +1,8 @@
-# Builds the ready-to-run Windows package (server, web app and extension in
-# one zip). To publish a release, change the version in packaging/VERSION and
-# push to main: the workflow builds and tests the package, then creates the
-# release and its tag (for example v0.2.0) if that version has none yet.
+# Builds the ready-to-run packages for Windows and Mac (server, web app and
+# extension in one zip each). To publish a release, change the version in
+# packaging/VERSION and push to main: both packages are built and tested, then
+# the release and its tag (for example v0.2.0) are created if that version has
+# none yet. Running the workflow by hand only keeps the zips as artifacts.
 name: Release
 
 on:
@@ -51,10 +52,7 @@ jobs:
           Copy-Item -Recurse web/dist Peter/web
           Copy-Item -Recurse extension Peter/extension
           Copy-Item packaging/windows/start-peter.cmd, packaging/windows/my-keys.example.cmd, packaging/windows/README-FIRST.txt Peter/
-          $zip = "Peter-$version-windows.zip"
-          Compress-Archive -Path Peter -DestinationPath $zip
-          "ZIP=$zip" | Out-File -FilePath $env:GITHUB_ENV -Append
-          "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Compress-Archive -Path Peter -DestinationPath "Peter-$version-windows.zip"
 
       # Starts the packaged server the way start-peter.cmd does and checks the
       # app and the API answer, so a broken package is never published.
@@ -84,18 +82,99 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: peter-windows
-          path: ${{ env.ZIP }}
+          name: windows
+          path: Peter-*-windows.zip
 
-      - name: Publish the release
-        if: github.ref == 'refs/heads/main'
-        shell: pwsh
+  macos:
+    name: Mac package
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.97.0"
+          targets: aarch64-apple-darwin, x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: server
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      # One program that runs on both Apple-chip and Intel Macs.
+      - name: Build the server (universal)
+        working-directory: server
+        env:
+          MACOSX_DEPLOYMENT_TARGET: "11.0"
+        run: |
+          cargo build --release --locked --target aarch64-apple-darwin
+          cargo build --release --locked --target x86_64-apple-darwin
+          lipo -create -output peter-server \
+            target/aarch64-apple-darwin/release/peter-server \
+            target/x86_64-apple-darwin/release/peter-server
+          # Apple-chip Macs only run signed code; an ad-hoc signature is enough.
+          codesign --force --sign - peter-server
+          lipo -info peter-server
+
+      - name: Build the web app
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
+
+      - name: Package
+        run: |
+          version="v$(tr -d '[:space:]' < packaging/VERSION)"
+          [[ "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "packaging/VERSION must look like 1.2.3"; exit 1; }
+          mkdir Peter
+          cp server/peter-server Peter/
+          cp -R web/dist Peter/web
+          cp -R extension Peter/extension
+          cp packaging/macos/start-peter.command packaging/macos/my-keys.example.sh packaging/macos/README-FIRST.txt Peter/
+          chmod +x Peter/peter-server Peter/start-peter.command
+          # ditto keeps the programs executable inside the zip.
+          ditto -c -k --keepParent Peter "Peter-$version-mac.zip"
+
+      - name: Smoke-test the package
+        working-directory: Peter
+        run: |
+          PETER_BIND=127.0.0.1:5173 PETER_WEB_DIR="$PWD/web" ./peter-server &
+          server=$!
+          trap 'kill $server' EXIT
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:5173/healthz >/dev/null && break; sleep 1; done
+          curl -sf http://127.0.0.1:5173/healthz | grep -q ok || { echo "The server did not start."; exit 1; }
+          curl -sf http://127.0.0.1:5173/sessions/example | grep -q '<div id="root">' || { echo "The web app was not served."; exit 1; }
+          curl -sf -X POST http://127.0.0.1:5173/v1/auth/signup -H 'content-type: application/json' \
+            -d '{"email":"smoke@example.com","password":"smoke-test-pass-1","name":"Smoke","workspace_name":"Smoke"}' | grep -q access_token \
+            || { echo "Sign-up failed."; exit 1; }
+          echo "Package works: web app served, sign-up OK."
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac
+          path: Peter-*-mac.zip
+
+  publish:
+    name: Publish the release
+    needs: [windows, macos]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Create the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view $env:VERSION 2>$null
-          if ($LASTEXITCODE -eq 0) {
-            Write-Output "Release $env:VERSION already exists; bump packaging/VERSION to publish a new one."
+          version="v$(tr -d '[:space:]' < packaging/VERSION)"
+          if gh release view "$version" >/dev/null 2>&1; then
+            echo "Release $version already exists; change packaging/VERSION to publish a new one."
             exit 0
-          }
-          gh release create $env:VERSION $env:ZIP --target $env:GITHUB_SHA --title "Peter $env:VERSION for Windows" --notes-file packaging/windows/RELEASE_NOTES.md
+          fi
+          gh release create "$version" dist/*.zip --target "$GITHUB_SHA" \
+            --title "Peter $version for Windows and Mac" --notes-file packaging/RELEASE_NOTES.md

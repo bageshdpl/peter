@@ -11,6 +11,7 @@ pub mod prompts;
 pub mod routes;
 pub mod security;
 pub mod state;
+pub mod trace;
 
 use axum::{
     Router,

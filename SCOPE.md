@@ -72,7 +72,7 @@ Each module is decided on its own: in, later, or out.
 - Chat with the session and with a single step.
 - Workspace "testing style" preferences learned from sample documents.
 
-### M5. Documents (done; structured traceability and PDF later)
+### M5. Documents (done; structured traceability done; PDF later)
 - Document editor with versions, comments (resolve, reopen) and review marks.
 - Traceability: every requirement linked to a test and its evidence.
 - Export to Word and Excel; PDF later.

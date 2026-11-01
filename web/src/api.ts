@@ -98,7 +98,7 @@ export interface Citations {
 export interface DocumentVersion {
   version: number;
   body: string;
-  origin: "ai" | "person";
+  origin: "ai" | "person" | "generated";
   provider: string | null;
   model: string | null;
   prompt_tokens: number | null;

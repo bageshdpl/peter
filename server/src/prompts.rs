@@ -52,7 +52,8 @@ table of the conclusions.",
 columns: ID (URS-001, URS-002, ...), Requirement (one testable 'shall' statement), Category (functional, \
 data integrity, audit trail, security and access, electronic signature, interface, reporting, performance), \
 GxP critical (yes/no), Severity, Probability, Detectability (each high/medium/low), Risk (high/medium/low), \
-Evidence. Then a short section explaining the risk method used. Requirements that come only from a vendor \
+Evidence. Keep the ID column first and name the risk column exactly 'Risk', because Peter reads this table \
+to build the traceability matrix. Then a short section explaining the risk method used. Requirements that come only from a vendor \
 document and were not observed must say so. Add requirements a system of this kind normally needs (for \
 example audit trail, access control, backup) only as [GAP: ...] rows unless the evidence covers them.",
         ),
@@ -60,16 +61,18 @@ example audit trail, access control, backup) only as [GAP: ...] rows unless the 
             "Functional and design specification",
             "For each requirement in [D:requirements], state how the system meets it. Table: ID (FS-001, ...), \
 Meets requirement (URS id), How the system does it (screens, fields, rules, workflow), Configured or custom, \
-Evidence. If the system is configured off-the-shelf software, say that a full design specification is not \
-expected and keep this to the functional mapping.",
+Evidence. Keep the ID column first and list the URS ids each item meets in the 'Meets requirement' column. If \
+the system is configured off-the-shelf software, say that a full design specification is not expected and keep \
+this to the functional mapping.",
         ),
         "configuration" => (
             "Configuration specification",
             "Record the system as configured, from what was observed and from the sources. Sections: \
 1. Environment and version. 2. Roles and permissions (table: role, what it can do, evidence). 3. Workflows \
 and their states. 4. Settings that affect GxP records (audit trail, signatures, password rules, session \
-timeouts), each with its observed value and evidence. 5. Master data and lists seen. Every value must be \
-cited; anything not observed is a [GAP: ...].",
+timeouts), each with its observed value and evidence. 5. Master data and lists seen. In each table, put an ID first (CS-001, CS-002, ...) and, where an item serves \
+a requirement in [D:requirements], name its URS ids in the row. Every value must be cited; anything not \
+observed is a [GAP: ...].",
         ),
         "plan" => (
             "Validation plan",
@@ -83,16 +86,20 @@ with empty name, role, signature and date cells.",
         "installation" => (
             "Installation qualification protocol",
             "Write the installation qualification (IQ) protocol. Sections: 1. Objective and scope. \
-2. Prerequisites. 3. Tests, one table per test: Step, Action, Expected result, Actual result, Evidence, \
-Pass/Fail. Checks cover version, environment, access to the system, required configuration and \
+2. Prerequisites. 3. Tests: start each with a heading that begins with its ID (for example '### IQ-001 Software \
+version'), then one table: Step, Action, Expected result, Actual result, Evidence, Pass/Fail. Write only Pass or \
+Fail in the Pass/Fail column, or leave it empty. Checks cover version, environment, access to the system, required configuration and \
 documentation. Fill Actual result and Pass/Fail only from observed evidence; otherwise write 'Not yet \
 executed'. 4. Deviations (none recorded, or [GAP: ...]).",
         ),
         "testing" => (
             "Test scripts and results",
             "Write operational and performance test scripts for the requirements in [D:requirements], high risk \
-first. For each script: ID (TS-001, ...), Title, Requirements covered (URS ids), Prerequisites and test data, \
-then a table: Step, Action, Expected result, Actual result, Evidence, Pass/Fail. Use the observed steps as \
+first. Start each script with a heading that begins with its ID, for example '### TS-001 Sample login by an \
+authorised user'. Directly under it write 'Requirements covered: URS-001, URS-003', then the prerequisites and \
+test data, then a table: Step, Action, Expected result, Actual result, Evidence, Pass/Fail. Write only Pass or \
+Fail in the Pass/Fail column, or leave it empty. Peter reads these headings, lines and columns to build the \
+traceability matrix. Use the observed steps as \
 executed results where they match: their action and what the screen showed. Where a script was not \
 executed in the evidence, write 'Not yet executed' and leave Pass/Fail empty. Include negative tests for \
 high-risk requirements (for example a user without permission is refused).",

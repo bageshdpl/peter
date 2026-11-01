@@ -266,7 +266,7 @@ pub struct ExportQuery {
     version: Option<i64>,
 }
 
-fn attachment(bytes: Vec<u8>, content_type: &str, filename: &str) -> AppResult<Response> {
+pub(super) fn attachment(bytes: Vec<u8>, content_type: &str, filename: &str) -> AppResult<Response> {
     let ascii: String = filename.chars().map(|c| if c.is_ascii_alphanumeric() || ".-_ ".contains(c) { c } else { '_' }).collect();
     let encoded: String = filename
         .bytes()

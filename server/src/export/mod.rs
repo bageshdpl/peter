@@ -348,6 +348,7 @@ fn describe_origin(origin: &str, provider: Option<&str>, model: Option<&str>) ->
     match (origin, provider) {
         ("ai", Some("sample")) => "sample draft, no AI".into(),
         ("ai", Some(p)) => format!("AI draft, {p}{}", model.map(|m| format!(" {m}")).unwrap_or_default()),
+        ("generated", _) => "built by Peter from the session's documents".into(),
         _ => "edit by a person".into(),
     }
 }

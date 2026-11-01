@@ -8,6 +8,7 @@ mod projects;
 mod review;
 mod sessions;
 mod sources;
+mod trace;
 mod workspace;
 
 use axum::{
@@ -86,6 +87,9 @@ pub fn router(max_upload_bytes: usize) -> Router<AppState> {
         .route("/sessions/{id}/documents/{step_id}/export/docx", get(review::export_docx))
         .route("/sessions/{id}/documents/{step_id}/export/xlsx", get(review::export_xlsx))
         .route("/sessions/{id}/export", get(review::export_package))
+        .route("/sessions/{id}/trace", get(trace::get))
+        .route("/sessions/{id}/trace/write", post(trace::write))
+        .route("/sessions/{id}/trace/export", get(trace::export_xlsx))
 }
 
 /// JSON body extractor whose errors use the API's error shape.

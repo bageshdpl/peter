@@ -401,3 +401,31 @@ textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 .thread-actions { display: flex; gap: 1rem; }
 .reply-form { display: flex; flex-direction: column; gap: 0.4rem; }
 @media (prefers-color-scheme: dark) { .quote-chip { background: #4e2f0b; color: #fedf89; } .count { color: #fdb022; } }
+
+/* Traceability */
+.trace-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0.6rem; margin-bottom: 0.75rem; }
+.stat { background: var(--surface-2); border-radius: 8px; padding: 0.6rem 0.75rem; display: flex; flex-direction: column; }
+.stat .n { font-size: 1.5rem; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.stat .l { font-size: 0.8rem; color: var(--muted); }
+.stat.ok .n { color: var(--accent); }
+.stat.bad .n { color: var(--danger); }
+.stat.warn .n { color: #b54708; }
+.progress.big { height: 8px; margin: 0 0 1rem; }
+.trace-table td { vertical-align: top; }
+.trace-table .small { font-size: 0.85rem; }
+.status-pill { font-size: 0.75rem; font-weight: 650; padding: 0.15rem 0.55rem; border-radius: 999px; white-space: nowrap; background: var(--surface-2); color: var(--muted); }
+.status-pill.passed { background: var(--accent-soft); color: var(--accent); }
+.status-pill.failed { background: var(--danger-soft); color: var(--danger); }
+.status-pill.not_tested { background: #fef0c7; color: #93370d; }
+.risk { font-size: 0.8rem; font-weight: 600; text-transform: capitalize; }
+.risk-high { color: var(--danger); }
+.risk-medium { color: #b54708; }
+[class^="dot-"] { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 0.2rem; background: var(--muted); }
+.dot-passed { background: var(--accent); }
+.dot-failed { background: var(--danger); }
+.trace-warnings { border-top: 1px solid var(--border); margin-top: 1rem; padding-top: 0.75rem; }
+.trace-warnings h3 { font-size: 0.95rem; margin: 0 0 0.35rem; }
+.trace-warnings ul { margin: 0; padding-left: 1.2rem; font-size: 0.9rem; }
+.trace-empty { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; background: var(--surface-2); border-radius: 8px; padding: 0.75rem; }
+.trace-empty p { margin: 0; }
+@media (prefers-color-scheme: dark) { .status-pill.not_tested { background: #4e2f0b; color: #fedf89; } .stat.warn .n { color: #fdb022; } }

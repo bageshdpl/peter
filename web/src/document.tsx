@@ -191,7 +191,9 @@ export function DocumentPanel(props: {
             <p className="muted small">
               Version {version.version}
               {shown && " (older version)"} ·{" "}
-              {version.origin === "ai" ? `Drafted with ${version.provider === "sample" ? "the sample drafter (no AI)" : `${version.provider}, ${version.model}`}` : "Edited"}{" "}
+              {version.origin === "ai"
+                ? `Drafted with ${version.provider === "sample" ? "the sample drafter (no AI)" : `${version.provider}, ${version.model}`}`
+                : version.origin === "generated" ? "Built by Peter from the session's documents (no AI)" : "Edited"}{" "}
               by {version.created_by_name}, {formatTime(version.created_at)}
             </p>
           )}
@@ -201,7 +203,7 @@ export function DocumentPanel(props: {
             <select aria-label="Version" value={shown?.version ?? doc.current_version} onChange={(e) => showVersion(Number(e.target.value))}>
               {view.versions!.map((v) => (
                 <option key={v.version} value={v.version}>
-                  v{v.version} · {v.origin === "ai" ? v.provider : "edit"} · {v.created_by_name}
+                  v{v.version} · {v.origin === "ai" ? v.provider : v.origin === "generated" ? "built" : "edit"} · {v.created_by_name}
                 </option>
               ))}
             </select>

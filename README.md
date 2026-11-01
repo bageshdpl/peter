@@ -110,6 +110,27 @@ How drafting works:
 
 Every export is recorded in the audit trail.
 
+## Traceability
+
+On the **Traceability matrix** step, Peter shows a live matrix read from the
+session's documents: requirement → specification → tests → result → evidence.
+It is built by plain rules, not AI, from these IDs:
+
+| Document (step) | What Peter reads |
+| --- | --- |
+| Requirements and risk | table rows whose ID column holds `URS-001`…, with the `Requirement` and `Risk` columns |
+| Functional and design spec, Configuration spec | table rows starting `FS-001`… or `CS-001`…; the `URS` ids in the row |
+| Installation qualification, Testing | headings starting `IQ-001`… or `TS-001`… (or table rows starting with them); the `URS` ids under the heading; the `Pass/Fail` column |
+
+A requirement is **Passed** when every test covering it passed, **Failed**
+when any failed, **Not yet executed** otherwise, and **No test** when nothing
+covers it. High-risk requirements that are not passed are counted separately.
+The AI prompts ask for these formats, and edited documents work the same way.
+
+**Write into document** saves the matrix as a new version of the
+Traceability document, marked "built by Peter (no AI)". The matrix also
+exports to Excel (matrix, tests, open items).
+
 ## Run the web app locally
 
 Needs Node.js 22 or later. With the API running in another terminal:
@@ -248,6 +269,14 @@ stream adds `step` and `document` events.
 
 The document view (`GET .../documents/{step_id}`) also returns `signatures`
 and `open_comments`.
+
+## API (traceability)
+
+| Method and path | Who | What |
+| --- | --- | --- |
+| `GET /v1/sessions/{id}/trace` | member | the matrix, tests, summary, warnings, and which document versions it was read from |
+| `POST /v1/sessions/{id}/trace/write` | member+ | save the matrix as a new version of the Traceability document |
+| `GET /v1/sessions/{id}/trace/export` | member | Excel workbook: Traceability, Tests, Open items |
 
 ### Roles
 

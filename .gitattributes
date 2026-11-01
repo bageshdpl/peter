@@ -1,0 +1,7 @@
+# Keep test fixtures byte-for-byte identical on every OS.
+*.pdf binary
+*.jpg binary
+*.jpeg binary
+*.png binary
+*.docx binary
+*.xlsx binary

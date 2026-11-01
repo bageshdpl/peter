@@ -1,0 +1,87 @@
+use std::{str::FromStr, sync::Arc};
+
+use sqlx::{
+    SqlitePool,
+    sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions},
+};
+
+#[derive(Debug, Clone)]
+pub struct Config {
+    pub database_url: String,
+    pub bind: String,
+    /// Where the web app runs. Used for CORS and for links in emails.
+    pub app_url: String,
+    pub access_ttl_secs: i64,
+    pub refresh_ttl_secs: i64,
+    pub invite_ttl_secs: i64,
+    pub reset_ttl_secs: i64,
+    pub allow_signup: bool,
+}
+
+impl Config {
+    pub fn from_env() -> Self {
+        let var = |name: &str, default: &str| std::env::var(name).unwrap_or_else(|_| default.to_string());
+        let num = |name: &str, default: i64| {
+            std::env::var(name).ok().and_then(|v| v.parse().ok()).unwrap_or(default)
+        };
+        Self {
+            database_url: var("PETER_DATABASE_URL", "sqlite://peter.db"),
+            bind: var("PETER_BIND", "127.0.0.1:8080"),
+            app_url: var("PETER_APP_URL", "http://localhost:5173"),
+            access_ttl_secs: num("PETER_ACCESS_TTL_SECS", 15 * 60),
+            refresh_ttl_secs: num("PETER_REFRESH_TTL_SECS", 30 * 24 * 3600),
+            invite_ttl_secs: num("PETER_INVITE_TTL_SECS", 7 * 24 * 3600),
+            reset_ttl_secs: num("PETER_RESET_TTL_SECS", 3600),
+            allow_signup: var("PETER_ALLOW_SIGNUP", "true") != "false",
+        }
+    }
+
+    pub fn for_tests() -> Self {
+        Self { database_url: "sqlite::memory:".into(), ..Self::from_env() }
+    }
+}
+
+/// Delivers links that would normally go out by email. Locally they are
+/// logged to the console; tests capture them.
+pub trait Mailer: Send + Sync {
+    fn send_link(&self, to: &str, subject: &str, link: &str);
+}
+
+pub struct ConsoleMailer;
+
+impl Mailer for ConsoleMailer {
+    fn send_link(&self, to: &str, subject: &str, link: &str) {
+        tracing::info!(%to, %subject, %link, "email (console delivery)");
+    }
+}
+
+#[derive(Clone)]
+pub struct AppState {
+    pub db: SqlitePool,
+    pub config: Arc<Config>,
+    pub mailer: Arc<dyn Mailer>,
+    /// A real Argon2 hash, verified against when an email is unknown so that
+    /// sign-in takes the same time whether or not the account exists.
+    pub dummy_hash: Arc<String>,
+}
+
+impl AppState {
+    pub async fn connect(config: Config, mailer: Arc<dyn Mailer>) -> Result<Self, BoxError> {
+        let in_memory = config.database_url.contains(":memory:");
+        let options = SqliteConnectOptions::from_str(&config.database_url)?
+            .create_if_missing(true)
+            .foreign_keys(true)
+            .journal_mode(if in_memory { SqliteJournalMode::Memory } else { SqliteJournalMode::Wal });
+        // An in-memory database exists per connection, so tests use exactly one.
+        let db = SqlitePoolOptions::new()
+            .max_connections(if in_memory { 1 } else { 8 })
+            .connect_with(options)
+            .await?;
+        sqlx::migrate!("./migrations").run(&db).await?;
+        let dummy_hash = crate::security::hash_password("peter-dummy-password")
+            .map_err(|_| BoxError::from("could not hash the dummy password"))?;
+        Ok(Self { db, config: Arc::new(config), mailer, dummy_hash: Arc::new(dummy_hash) })
+    }
+}
+
+pub type BoxError = Box<dyn std::error::Error + Send + Sync>;

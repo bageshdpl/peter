@@ -43,7 +43,7 @@ each step produces one or more documents.
 
 Each module is decided on its own: in, later, or out.
 
-### M0. Foundation
+### M0. Foundation (done, see README.md)
 - Rust workspace, configuration, database migrations, structured errors.
 - Email and password sign-in (Argon2), access and refresh tokens, logout, `me`.
 - Workspaces: create, switch, invite members, accept invite.

@@ -193,7 +193,7 @@ export function CommentsPanel(props: {
             <p className="muted small">Select text in the document to comment on it, or comment on the whole document.</p>
           )}
           <textarea rows={2} maxLength={4000} required value={text} onChange={(e) => setText(e.target.value)}
-            placeholder="Add a comment for the team" aria-label="New comment" />
+            placeholder="Add a comment for the team. Type @ and a name to notify someone." aria-label="New comment" />
           <div className="form-actions">
             <button className="btn primary" disabled={busy || !text.trim()}>Comment</button>
           </div>

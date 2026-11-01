@@ -11,6 +11,7 @@ import AuditLog from "./pages/AuditLog";
 import Settings from "./pages/Settings";
 import Security from "./pages/Security";
 import Library from "./pages/Library";
+import Notifications from "./pages/Notifications";
 
 export function useSession() {
   const [session, setSession] = useState<Session | null>(getSession());
@@ -53,6 +54,7 @@ export default function App() {
         <Route path="settings" element={<Settings />} />
         <Route path="security" element={<Security />} />
         <Route path="library" element={<Library />} />
+        <Route path="notifications" element={<Notifications />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

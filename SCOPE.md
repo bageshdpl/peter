@@ -84,7 +84,7 @@ Each module is decided on its own: in, later, or out.
 ### M7. Controls (done)
 - Extract controls from SOPs and standards; map them to requirements; coverage view.
 
-### M8. Sharing and collaboration
+### M8. Sharing and collaboration (done)
 - Share a document or session with a person; "shared with me"; notifications count.
 
 ### M9. Administration and enterprise (sign-in limits, two-factor sign-in and active sessions done)
@@ -110,7 +110,7 @@ Each module is decided on its own: in, later, or out.
 | M5 Documents | in, Word export only |
 | M6 Library | later |
 | M7 Controls | done |
-| M8 Sharing | later |
+| M8 Sharing | done |
 | M9 Administration | password reset and audit trail in; the rest later or out |
 
 The first milestone inside that release is the core loop: sign in, create a

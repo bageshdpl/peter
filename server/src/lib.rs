@@ -9,6 +9,7 @@ pub mod error;
 pub mod export;
 pub mod extract;
 pub mod mfa;
+pub mod notify;
 pub mod prompts;
 pub mod routes;
 pub mod security;

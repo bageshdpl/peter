@@ -11,6 +11,7 @@ mod projects;
 mod review;
 mod security;
 mod sessions;
+mod sharing;
 mod sources;
 mod trace;
 mod workspace;
@@ -117,6 +118,13 @@ pub fn router(max_upload_bytes: usize) -> Router<AppState> {
         .route("/sessions/{id}/controls", get(controls::coverage))
         .route("/sessions/{id}/controls/export", get(controls::export_xlsx))
         .route("/sessions/{id}/controls/{key}", axum::routing::put(controls::decide))
+        .route("/sessions/{id}/shares", get(sharing::list_for_session).post(sharing::create))
+        .route("/shares/{share_id}", delete(sharing::revoke))
+        .route("/shares/{share_id}/done", post(sharing::set_done))
+        .route("/shared-with-me", get(sharing::shared_with_me))
+        .route("/notifications", get(sharing::notifications))
+        .route("/notifications/unread", get(sharing::unread))
+        .route("/notifications/read", post(sharing::mark_read))
         .route("/meta", get(meta::meta))
         .route("/extension/download", get(meta::extension_zip))
         .fallback(|| async { AppError::not_found("No such API endpoint.") })

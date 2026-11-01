@@ -9,6 +9,7 @@ import { DocumentPanel } from "../document";
 import { useSessionEvents } from "../events";
 import { ObservationPanel } from "../observe";
 import { ControlsPanel } from "../controls";
+import { SharePanel } from "../sharing";
 import { TracePanel } from "../trace";
 import { messageOf, Notice } from "../ui";
 
@@ -34,6 +35,7 @@ export default function SessionPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [title, setTitle] = useState("");
+  const [sharing, setSharing] = useState(false);
   const events = useSessionEvents(id!);
 
   const load = useCallback(async () => {
@@ -145,6 +147,7 @@ export default function SessionPage() {
               )}
             </select>
           </label>
+          {!archived && <button className="btn ghost" onClick={() => setSharing((v) => !v)}>Share</button>}
           {data.documents.some((d) => d.current_version > 0) && (
             <button className="btn ghost" onClick={() => downloadFile(`/v1/sessions/${id}/export`, `${session.title} validation package.zip`).catch((e) => setError(messageOf(e)))}>
               Export package
@@ -159,6 +162,18 @@ export default function SessionPage() {
       </header>
 
       {archived && <Notice kind="error">This session is archived and read-only.</Notice>}
+      {sharing && !archived && (
+        <SharePanel
+          sessionId={session.id}
+          meId={me.user.id}
+          steps={steps}
+          draftedSteps={data.documents.filter((d) => d.current_version > 0).map((d) => d.step_id)}
+          currentStep={viewing?.id ?? null}
+          canWrite={canWrite}
+          isAdmin={atLeast(me.workspace.role, "admin")}
+          onClose={() => setSharing(false)}
+        />
+      )}
       {error && <Notice kind="error">{error}</Notice>}
 
       <div className="workspace">

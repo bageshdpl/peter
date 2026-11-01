@@ -137,6 +137,31 @@ pub async fn add_comment(
     .await?;
     audit(&mut tx, Some(&auth.workspace_id), Some(&auth.user_id), if body.parent_id.is_some() { "comment.replied" } else { "comment.added" },
         Some(&id), json!({ "session_id": session_id, "step_id": step_id, "version": version })).await?;
+
+    // Tell the people named with @, and everyone already in the thread.
+    let members: Vec<(String, String, String)> = sqlx::query_as(
+        "SELECT u.id, u.name, u.email FROM memberships m JOIN users u ON u.id = m.user_id WHERE m.workspace_id = ?",
+    )
+    .bind(&auth.workspace_id)
+    .fetch_all(&mut *tx)
+    .await?;
+    let mentioned = crate::notify::mentions(text, &members);
+    let who = crate::notify::name_of(&mut tx, &auth.user_id).await?;
+    let place = crate::notify::place(&mut tx, &session_id, Some(&step_id)).await?;
+    let excerpt: String = text.chars().take(160).collect();
+    let note = |kind: &'static str, text: String| crate::notify::Note {
+        workspace_id: &auth.workspace_id, actor_id: &auth.user_id, kind, session_id: &session_id, step_id: Some(&step_id), text,
+    };
+    crate::notify::send(&mut tx, &mentioned, &note("mention", format!("{who} mentioned you on {place}: “{excerpt}”"))).await?;
+    if let Some(parent) = &body.parent_id {
+        let thread: Vec<(String,)> = sqlx::query_as("SELECT DISTINCT author_id FROM document_comments WHERE id = ? OR parent_id = ?")
+            .bind(parent)
+            .bind(parent)
+            .fetch_all(&mut *tx)
+            .await?;
+        let others: Vec<String> = thread.into_iter().map(|(id,)| id).filter(|id| !mentioned.contains(id)).collect();
+        crate::notify::send(&mut tx, &others, &note("reply", format!("{who} replied on {place}: “{excerpt}”"))).await?;
+    }
     tx.commit().await?;
     publish(&state, &auth, &session_id, "comment", json!({ "step_id": step_id }));
     Ok((StatusCode::CREATED, Json(json!({ "id": id }))))
@@ -258,6 +283,37 @@ pub async fn sign(
     }
     audit(&mut tx, Some(&auth.workspace_id), Some(&auth.user_id), "document.signed", Some(&doc_id),
         json!({ "session_id": session_id, "step_id": step_id, "version": current, "meaning": body.meaning })).await?;
+
+    // Signing completes the signer's open review requests for this document,
+    // and tells whoever asked.
+    let requests: Vec<(String, String)> = sqlx::query_as(
+        "SELECT id, shared_by FROM shares WHERE session_id = ? AND step_id = ? AND user_id = ? AND kind = 'review'
+         AND done_at IS NULL AND revoked_at IS NULL",
+    )
+    .bind(&session_id)
+    .bind(&step_id)
+    .bind(&auth.user_id)
+    .fetch_all(&mut *tx)
+    .await?;
+    sqlx::query(
+        "UPDATE shares SET done_at = ? WHERE session_id = ? AND step_id = ? AND user_id = ? AND kind = 'review'
+         AND done_at IS NULL AND revoked_at IS NULL",
+    )
+    .bind(t)
+    .bind(&session_id)
+    .bind(&step_id)
+    .bind(&auth.user_id)
+    .execute(&mut *tx)
+    .await?;
+    if !requests.is_empty() {
+        let who = crate::notify::name_of(&mut tx, &auth.user_id).await?;
+        let place = crate::notify::place(&mut tx, &session_id, Some(&step_id)).await?;
+        let askers: Vec<String> = requests.into_iter().map(|(_, by)| by).collect();
+        crate::notify::send(&mut tx, &askers, &crate::notify::Note {
+            workspace_id: &auth.workspace_id, actor_id: &auth.user_id, kind: "signed", session_id: &session_id, step_id: Some(&step_id),
+            text: format!("{who} signed version {current} of {place} as {}.", body.meaning),
+        }).await?;
+    }
     tx.commit().await?;
     publish(&state, &auth, &session_id, "document", json!({ "step_id": step_id, "status": status }));
     Ok((StatusCode::CREATED, Json(json!({ "id": id, "version": current, "meaning": body.meaning, "signed_at": t }))))

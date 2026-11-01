@@ -197,6 +197,25 @@ follows each one through the requirements to their tests.
 Like the matrix, this is built by plain rules, not AI, so the same documents
 always give the same result.
 
+## Sharing and notifications
+
+Everyone in a workspace can open every session. Sharing points a colleague at
+one and tells them.
+
+- **Share.** In a session, click **Share**, choose a person and either the
+  whole session or one document, and add a message if you like.
+- **Ask for a review.** Tick "Ask them to review and sign this document"
+  (members, admins and owners only, since viewers cannot sign). It stays on
+  their home page under **Shared with you** until they sign that document;
+  signing completes it and tells you.
+- **@mentions.** In a comment, type `@` and a person's full name (or email)
+  to notify them. Replies notify everyone already in the thread.
+- **Notifications.** The sidebar shows how many are unread; the
+  **Notifications** page lists them, and clicking one opens the place it is
+  about. Peter does not send emails.
+
+Shares, review requests and their removal are in the audit trail.
+
 ## Security
 
 Open **Security** in the sidebar.
@@ -418,6 +437,19 @@ other calls answer `403` with code `mfa_setup_required`.
 | `GET /v1/sessions/{id}/controls` | viewer | coverage of every control, and the session's requirements |
 | `PUT /v1/sessions/{id}/controls/{key}` | member | `requirements` (URS ids), `not_applicable`, `reason` |
 | `GET /v1/sessions/{id}/controls/export` | viewer | the coverage as Excel |
+
+## API (sharing and notifications)
+
+| Method and path | Who | What |
+| --- | --- | --- |
+| `POST /v1/sessions/{id}/shares` | member | `user_id`, optional `step_id`, `review` (ask to sign), `message` |
+| `GET /v1/sessions/{id}/shares` | viewer | open shares on the session |
+| `DELETE /v1/shares/{id}` | who shared it, or admin | remove it |
+| `POST /v1/shares/{id}/done` | who it was shared with | `done`: true or false |
+| `GET /v1/shared-with-me` | viewer | open shares, then done ones from the last 30 days |
+| `GET /v1/notifications` | viewer | latest 100 (`?unread=true` for unread only) and the unread count |
+| `GET /v1/notifications/unread` | viewer | the unread count |
+| `POST /v1/notifications/read` | viewer | `ids`, or `all: true` |
 
 ### Roles
 

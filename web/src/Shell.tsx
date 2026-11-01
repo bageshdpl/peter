@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Navigate, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { atLeast, logout, reloadSession, startSession } from "./api";
 import { useSession } from "./App";
+import { useUnread } from "./sharing";
 
 export default function Shell() {
   const session = useSession()!;
@@ -9,6 +10,7 @@ export default function Shell() {
   const location = useLocation();
   const [switching, setSwitching] = useState(false);
   const isAdmin = atLeast(session.workspace.role, "admin");
+  const unread = useUnread(session.workspace.id);
 
   // Roles and workspaces can change on another device, so re-read them on
   // every page change rather than trusting what was saved at sign-in.
@@ -53,6 +55,9 @@ export default function Shell() {
 
         <nav className="nav">
           <NavLink to="/" end>Projects</NavLink>
+          <NavLink to="/notifications" aria-label={unread ? `Notifications, ${unread} unread` : "Notifications"}>
+            Notifications {unread > 0 && <span className="badge">{unread > 99 ? "99+" : unread}</span>}
+          </NavLink>
           <NavLink to="/library">Library</NavLink>
           <NavLink to="/members">Members</NavLink>
           {isAdmin && <NavLink to="/audit">Audit trail</NavLink>}

@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { api, atLeast, formatTime, type Project, type ValidationSession } from "../api";
 import { useSession } from "../App";
 import { NewSessionForm, SessionTable } from "../sessions";
+import { SharedWithMe } from "../sharing";
 import { Field, messageOf, Notice, useAction } from "../ui";
 
 export default function Home() {
@@ -58,6 +59,7 @@ export default function Home() {
       )}
 
       {error && <Notice kind="error">{error}</Notice>}
+      <SharedWithMe key={session.workspace.id} />
 
       <div className="tabs" role="tablist">
         <button role="tab" aria-selected={!showArchived} onClick={() => setShowArchived(false)}>Active</button>

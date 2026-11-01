@@ -14,7 +14,28 @@ const ACTIONS: Record<string, string> = {
   "member.removed": "Removed a member",
   "member.left": "Left the workspace",
   "user.password_changed": "Changed their password",
+  "project.created": "Created a project",
+  "project.updated": "Edited a project",
+  "project.archived": "Archived a project",
+  "project.restored": "Restored a project",
+  "session.created": "Started a session",
+  "session.updated": "Edited a session",
+  "session.archived": "Archived a session",
+  "session.restored": "Restored a session",
+  "source.uploaded": "Added a file",
+  "source.removed": "Removed a file",
 };
+
+/** "name: Old → New; vendor: … " for update events. */
+function changes(d: Record<string, unknown>) {
+  return Object.entries(d)
+    .filter(([, v]) => v && typeof v === "object" && "to" in (v as object))
+    .map(([k, v]) => {
+      const c = v as { from: unknown; to: unknown };
+      return `${k.replace("_", " ")}: ${String(c.from ?? "none") || "empty"} → ${String(c.to ?? "none") || "empty"}`;
+    })
+    .join("; ");
+}
 
 function describe(e: AuditEvent): string {
   const d = e.detail ?? {};
@@ -30,6 +51,16 @@ function describe(e: AuditEvent): string {
       return String(d.name ?? "");
     case "member.joined":
       return `as ${String(d.role)}`;
+    case "project.created":
+      return String(d.name ?? "");
+    case "session.created":
+      return String(d.title ?? "");
+    case "source.uploaded":
+    case "source.removed":
+      return String(d.filename ?? "");
+    case "project.updated":
+    case "session.updated":
+      return changes(d);
     default:
       return "";
   }

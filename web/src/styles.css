@@ -164,3 +164,82 @@ td select { min-height: 32px; padding: 0.25rem 0.5rem; }
   .auth-card { padding: 1.5rem; }
   .hide-sm { display: none; }
 }
+
+/* M1: projects and sessions */
+.small { font-size: 0.82rem; }
+.grow { flex: 1; min-width: 0; }
+.prewrap { white-space: pre-wrap; }
+textarea {
+  font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; padding: 0.5rem 0.65rem; resize: vertical;
+}
+textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.head-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.form-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.5rem; }
+.card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 0.75rem; }
+.card-head h2 { margin-bottom: 0.15rem; }
+.crumbs { font-size: 0.88rem; color: var(--muted); }
+.crumbs a { color: var(--muted); }
+
+.tabs { display: flex; gap: 0.25rem; border-bottom: 1px solid var(--border); }
+.tabs button {
+  font: inherit; font-weight: 550; background: none; border: 0; padding: 0.5rem 0.75rem; cursor: pointer;
+  color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.tabs button[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
+
+.project-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; }
+.project-card { display: flex; flex-direction: column; gap: 0.35rem; }
+.project-card h2 { margin: 0; }
+.stats { display: flex; gap: 1rem; font-size: 0.9rem; font-weight: 550; margin-top: 0.4rem; }
+
+.row-link { font-weight: 600; text-decoration: none; }
+.row-link:hover { text-decoration: underline; }
+.link-btn { font: inherit; font-weight: 600; color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
+.link-btn:hover { text-decoration: underline; }
+.file-btn { position: relative; overflow: hidden; display: inline-block; }
+.file-btn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
+.new-session { margin-bottom: 1rem; }
+.type-picker { border: 0; padding: 0; margin: 0 0 0.5rem; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.6rem; }
+.type-picker legend { margin-bottom: 0.5rem; }
+.type-option {
+  display: flex; flex-direction: column; gap: 0.2rem; padding: 0.7rem 0.8rem; border: 1px solid var(--border);
+  border-radius: 8px; cursor: pointer; font-size: 0.88rem; position: relative;
+}
+.type-option input { position: absolute; opacity: 0; pointer-events: none; }
+.type-option.selected { border-color: var(--accent); background: var(--accent-soft); }
+.type-option.disabled { cursor: default; opacity: 0.55; }
+.type-option:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+.type-title { font-weight: 600; font-size: 0.95rem; display: flex; justify-content: space-between; gap: 0.5rem; }
+.soon { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+
+.title-input {
+  width: 100%; font-size: 1.6rem; font-weight: 650; border: 1px solid transparent; background: transparent;
+  padding: 0.1rem 0.3rem; margin-left: -0.3rem;
+}
+.title-input:hover { border-color: var(--border); }
+.inline-field { flex-direction: row; align-items: center; gap: 0.75rem; }
+.inline-field select { min-width: 220px; }
+
+.steps { list-style: none; margin: 1rem 0 0; padding: 0; display: flex; flex-direction: column; }
+.steps li { display: flex; gap: 0.85rem; padding: 0.7rem 0; border-top: 1px solid var(--border); }
+.steps li:first-child { border-top: 0; }
+.steps p { margin: 0.1rem 0 0; font-size: 0.9rem; }
+.step-num {
+  flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%;
+  background: var(--surface-2); color: var(--muted); font-weight: 650; font-size: 0.85rem;
+}
+.steps li.current .step-num { background: var(--accent); color: var(--accent-text); }
+.steps li.done .step-num { background: var(--accent-soft); color: var(--accent); }
+.here {
+  margin-left: 0.5rem; font-size: 0.72rem; font-weight: 650; text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--accent);
+}
+
+@media (max-width: 760px) {
+  .page-head { flex-direction: column; align-items: stretch; }
+  .inline-field { flex-direction: column; align-items: stretch; }
+  .inline-field select { min-width: 0; }
+  .card-head { flex-direction: column; }
+}

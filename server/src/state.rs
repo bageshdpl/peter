@@ -16,6 +16,9 @@ pub struct Config {
     pub invite_ttl_secs: i64,
     pub reset_ttl_secs: i64,
     pub allow_signup: bool,
+    /// Where uploaded files are kept.
+    pub data_dir: std::path::PathBuf,
+    pub max_upload_bytes: usize,
 }
 
 impl Config {
@@ -33,11 +36,14 @@ impl Config {
             invite_ttl_secs: num("PETER_INVITE_TTL_SECS", 7 * 24 * 3600),
             reset_ttl_secs: num("PETER_RESET_TTL_SECS", 3600),
             allow_signup: var("PETER_ALLOW_SIGNUP", "true") != "false",
+            data_dir: var("PETER_DATA_DIR", "peter-data").into(),
+            max_upload_bytes: num("PETER_MAX_UPLOAD_MB", 25) as usize * 1024 * 1024,
         }
     }
 
     pub fn for_tests() -> Self {
-        Self { database_url: "sqlite::memory:".into(), ..Self::from_env() }
+        let data_dir = std::env::temp_dir().join(format!("peter-test-{}", uuid::Uuid::new_v4().simple()));
+        Self { database_url: "sqlite::memory:".into(), data_dir, max_upload_bytes: 1024 * 1024, ..Self::from_env() }
     }
 }
 
@@ -78,6 +84,7 @@ impl AppState {
             .connect_with(options)
             .await?;
         sqlx::migrate!("./migrations").run(&db).await?;
+        tokio::fs::create_dir_all(config.data_dir.join("sources")).await?;
         let dummy_hash = crate::security::hash_password("peter-dummy-password")
             .map_err(|_| BoxError::from("could not hash the dummy password"))?;
         Ok(Self { db, config: Arc::new(config), mailer, dummy_hash: Arc::new(dummy_hash) })

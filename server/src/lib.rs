@@ -1,6 +1,7 @@
 //! Peter API server.
 
 pub mod auth;
+pub mod catalog;
 pub mod error;
 pub mod routes;
 pub mod security;
@@ -23,7 +24,7 @@ pub fn app(state: AppState) -> Router {
 
     Router::new()
         .route("/healthz", get(|| async { "ok" }))
-        .nest("/v1", routes::router())
+        .nest("/v1", routes::router(state.config.max_upload_bytes))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
         .with_state(state)

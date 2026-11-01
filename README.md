@@ -5,8 +5,8 @@ it does and the build plan.
 
 | Part | Folder | Status |
 | --- | --- | --- |
-| API server (Rust) | `server/` | M0 Foundation done |
-| Web app (React) | `web/` | sign-in, members, audit trail, settings |
+| API server (Rust) | `server/` | M0 Foundation, M1 Projects and sessions |
+| Web app (React) | `web/` | sign-in, projects, sessions, sources, members, audit trail, settings |
 | Observer extension | `extension/` | not started |
 
 ## Run the API locally
@@ -44,7 +44,7 @@ calls to the API at `http://127.0.0.1:8080`; set `PETER_API_URL` to change
 that.
 
 Screens: sign in, create account, forgot and reset password, accept an invite,
-home, members (invite, change roles, remove, withdraw invites), audit trail,
+projects (with sources and sessions), sessions, members (invite, change roles, remove, withdraw invites), audit trail,
 and settings (change password, rename the workspace, create another
 workspace). The workspace switcher is in the sidebar.
 
@@ -63,6 +63,8 @@ window (or a private window) without email.
 | `PETER_INVITE_TTL_SECS` | `604800` | invite lifetime (7 days) |
 | `PETER_RESET_TTL_SECS` | `3600` | password reset link lifetime |
 | `PETER_ALLOW_SIGNUP` | `true` | `false` makes the API invite-only |
+| `PETER_DATA_DIR` | `peter-data` | folder for uploaded files |
+| `PETER_MAX_UPLOAD_MB` | `25` | largest file accepted |
 
 ## API (M0)
 
@@ -92,6 +94,32 @@ login, refresh, accept-invite and password reset. Errors look like
 | `DELETE /v1/members/{user_id}` | admin, or yourself | remove a member, or leave |
 | `DELETE /v1/invites/{id}` | admin | withdraw an invite |
 | `GET /v1/audit` | admin | audit trail, newest first; page with `?before=<seq>` |
+
+## API (M1)
+
+| Method and path | Who | What |
+| --- | --- | --- |
+| `GET /v1/validation-types` | member | the kinds of validation and their steps |
+| `GET /v1/projects?archived=false` | member | projects, with session and file counts |
+| `POST /v1/projects` | member+ | create: `name`, `system_name`, `vendor`, `description` |
+| `GET /v1/projects/{id}` | member | one project |
+| `PATCH /v1/projects/{id}` | member+ | change any of the fields above |
+| `POST /v1/projects/{id}/archive`, `/restore` | admin | archived projects are read-only |
+| `GET /v1/projects/{id}/sources` | member | reference files |
+| `POST /v1/projects/{id}/sources` | member+ | upload, multipart field `file` |
+| `GET /v1/projects/{id}/sources/{source_id}/file` | member | download |
+| `DELETE /v1/projects/{id}/sources/{source_id}` | member+ | hide from the project; the stored copy is kept |
+| `GET /v1/sessions?project_id=&unfiled=&archived=` | member | sessions |
+| `POST /v1/sessions` | member+ | start: `title`, `validation_type`, optional `project_id` |
+| `GET /v1/sessions/{id}` | member | the session with its type and steps |
+| `PATCH /v1/sessions/{id}` | member+ | `title`; `project_id` moves it (`null` unfiles it) |
+| `POST /v1/sessions/{id}/archive`, `/restore` | member+ | archived sessions are read-only |
+
+"member" means any role including viewer; "member+" excludes viewers.
+Uploads accept PDF, Word (.docx), Excel (.xlsx), CSV, text, Markdown, PNG and
+JPEG. The file type comes from the extension, and each file's SHA-256 is
+recorded. Only Initial validation can be started so far; the other types are
+listed with their steps and marked unavailable.
 
 ### Roles
 

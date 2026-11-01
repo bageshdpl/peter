@@ -49,7 +49,7 @@ Each module is decided on its own: in, later, or out.
 - Workspaces: create, switch, invite members, accept invite.
 - Roles: owner, admin, member, viewer.
 
-### M1. Projects and sessions
+### M1. Projects and sessions (done)
 - Projects (the system being validated), archive.
 - Sessions: one validation run in a project, with its validation type.
 - Unfiled sessions, project sources (uploaded files).

@@ -29,6 +29,43 @@ export interface AuditEvent {
   at: number;
 }
 
+export interface Project {
+  id: string;
+  name: string;
+  system_name: string;
+  vendor: string;
+  description: string;
+  created_by_name: string;
+  created_at: number;
+  updated_at: number;
+  archived_at: number | null;
+  session_count: number;
+  source_count: number;
+}
+export interface ValidationSession {
+  id: string;
+  project_id: string | null;
+  project_name: string | null;
+  title: string;
+  validation_type: string;
+  current_step: string | null;
+  created_by_name: string;
+  created_at: number;
+  updated_at: number;
+  archived_at: number | null;
+}
+export interface Step { id: string; label: string; summary: string }
+export interface ValidationType { id: string; title: string; summary: string; available: boolean; steps: Step[] }
+export interface Source {
+  id: string;
+  filename: string;
+  content_type: string;
+  size_bytes: number;
+  sha256: string;
+  uploaded_by_name?: string;
+  created_at: number;
+}
+
 export class ApiError extends Error {
   constructor(public status: number, public code: string, message: string) {
     super(message);
@@ -71,9 +108,15 @@ export function onSessionChange(fn: (s: Session | null) => void) {
 
 async function send(method: string, path: string, body?: unknown, token?: string): Promise<Response> {
   const headers: Record<string, string> = {};
-  if (body !== undefined) headers["Content-Type"] = "application/json";
   if (token) headers["Authorization"] = `Bearer ${token}`;
-  return fetch(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+  let payload: BodyInit | undefined;
+  if (body instanceof FormData) {
+    payload = body; // The browser sets the multipart boundary itself.
+  } else if (body !== undefined) {
+    headers["Content-Type"] = "application/json";
+    payload = JSON.stringify(body);
+  }
+  return fetch(path, { method, headers, body: payload });
 }
 
 async function parse<T>(res: Response): Promise<T> {
@@ -108,13 +151,36 @@ async function refresh(): Promise<boolean> {
   return refreshing;
 }
 
-export async function api<T>(method: string, path: string, body?: unknown): Promise<T> {
+/** Sends an authenticated request, refreshing the access token once if needed. */
+async function authed(method: string, path: string, body?: unknown): Promise<Response> {
   let res = await send(method, path, body, session?.access_token);
   if (res.status === 401 && session && (await refresh())) {
     res = await send(method, path, body, session?.access_token);
   }
   if (res.status === 401 && session) setSession(null);
-  return parse<T>(res);
+  return res;
+}
+
+export async function api<T>(method: string, path: string, body?: unknown): Promise<T> {
+  return parse<T>(await authed(method, path, body));
+}
+
+export async function uploadFile<T>(path: string, file: File): Promise<T> {
+  const form = new FormData();
+  form.append("file", file);
+  return parse<T>(await authed("POST", path, form));
+}
+
+/** Downloads with the access token (a plain link cannot send it) and saves the file. */
+export async function downloadFile(path: string, filename: string) {
+  const res = await authed("GET", path);
+  if (!res.ok) await parse(res);
+  const url = URL.createObjectURL(await res.blob());
+  const a = Object.assign(document.createElement("a"), { href: url, download: filename });
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 /** Calls that start a session (sign-in, sign-up, accept invite, switch). */
@@ -149,6 +215,12 @@ export function readHashToken(): string | null {
 /** Removes the token from the address bar and history once it has been read. */
 export function clearHash() {
   if (window.location.hash) history.replaceState(null, "", window.location.pathname + window.location.search);
+}
+
+export function formatSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 export const formatTime = (secs: number) =>

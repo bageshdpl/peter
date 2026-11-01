@@ -1,11 +1,14 @@
 mod audit;
 mod auth;
 mod members;
+mod projects;
+mod sessions;
+mod sources;
 mod workspace;
 
 use axum::{
     Router,
-    extract::FromRequest,
+    extract::{DefaultBodyLimit, FromRequest},
     routing::{delete, get, patch, post},
 };
 use serde::Serialize;
@@ -17,7 +20,7 @@ use crate::{
     state::AppState,
 };
 
-pub fn router() -> Router<AppState> {
+pub fn router(max_upload_bytes: usize) -> Router<AppState> {
     Router::new()
         .route("/auth/signup", post(auth::signup))
         .route("/auth/login", post(auth::login))
@@ -36,6 +39,24 @@ pub fn router() -> Router<AppState> {
         .route("/members/{user_id}", patch(members::change_role).delete(members::remove))
         .route("/invites/{invite_id}", delete(members::revoke_invite))
         .route("/audit", get(audit::list))
+        .route("/validation-types", get(sessions::types))
+        .route("/projects", get(projects::list).post(projects::create))
+        .route("/projects/{id}", get(projects::get).patch(projects::update))
+        .route("/projects/{id}/archive", post(projects::archive))
+        .route("/projects/{id}/restore", post(projects::restore))
+        .route(
+            "/projects/{id}/sources",
+            get(sources::list)
+                .post(sources::upload)
+                // Room for the multipart framing around the largest allowed file.
+                .layer(DefaultBodyLimit::max(max_upload_bytes + 64 * 1024)),
+        )
+        .route("/projects/{id}/sources/{source_id}", delete(sources::remove))
+        .route("/projects/{id}/sources/{source_id}/file", get(sources::download))
+        .route("/sessions", get(sessions::list).post(sessions::create))
+        .route("/sessions/{id}", get(sessions::get).patch(sessions::update))
+        .route("/sessions/{id}/archive", post(sessions::archive))
+        .route("/sessions/{id}/restore", post(sessions::restore))
 }
 
 /// JSON body extractor whose errors use the API's error shape.

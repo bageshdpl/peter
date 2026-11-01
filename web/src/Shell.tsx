@@ -52,7 +52,7 @@ export default function Shell() {
         </label>
 
         <nav className="nav">
-          <NavLink to="/" end>Home</NavLink>
+          <NavLink to="/" end>Projects</NavLink>
           <NavLink to="/members">Members</NavLink>
           {isAdmin && <NavLink to="/audit">Audit trail</NavLink>}
           <NavLink to="/settings">Settings</NavLink>

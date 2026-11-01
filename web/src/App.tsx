@@ -4,6 +4,8 @@ import { getSession, onSessionChange, type Session } from "./api";
 import Shell from "./Shell";
 import { AcceptInvite, ForgotPassword, ResetPassword, SignIn, SignUp } from "./pages/Auth";
 import Home from "./pages/Home";
+import ProjectPage from "./pages/ProjectPage";
+import SessionPage from "./pages/SessionPage";
 import Members from "./pages/Members";
 import AuditLog from "./pages/AuditLog";
 import Settings from "./pages/Settings";
@@ -42,6 +44,8 @@ export default function App() {
         }
       >
         <Route index element={<Home />} />
+        <Route path="projects/:id" element={<ProjectPage />} />
+        <Route path="sessions/:id" element={<SessionPage />} />
         <Route path="members" element={<Members />} />
         <Route path="audit" element={<AuditLog />} />
         <Route path="settings" element={<Settings />} />

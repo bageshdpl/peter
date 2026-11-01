@@ -20,7 +20,7 @@ Learned from its public web bundle and its public Firefox extension manifest.
 | Data | unknown (server side) | SQLite locally, Postgres later (SQLx) |
 | Extension | Manifest V3, side panel, step recorder, screenshot capture, redaction, per-site permission | Manifest V3 in TypeScript, Chrome first |
 | AI | AWS Bedrock, or the customer's own Bedrock (BYOK) | provider layer: OpenRouter and Gemini first |
-| Exports | Word, Excel, PDF, ZIP | Word and Excel from Rust, PDF later |
+| Exports | Word, Excel, PDF, ZIP | Word, Excel and PDF from Rust, ZIP package |
 
 ## Validation types
 
@@ -72,10 +72,10 @@ Each module is decided on its own: in, later, or out.
 - Chat with the session and with a single step.
 - Workspace "testing style" preferences learned from sample documents.
 
-### M5. Documents (done; structured traceability done; PDF later)
+### M5. Documents (done; structured traceability done; PDF done)
 - Document editor with versions, comments (resolve, reopen) and review marks.
 - Traceability: every requirement linked to a test and its evidence.
-- Export to Word and Excel; PDF later.
+- Export to Word, Excel and PDF.
 
 ### M6. Library (done: regulations, templates, branding)
 - Templates, reference documents, standards (for example 21 CFR Part 11, EU Annex 11, GAMP 5).

@@ -92,6 +92,7 @@ pub fn router(max_upload_bytes: usize) -> Router<AppState> {
         .route("/sessions/{id}/documents/{step_id}/signatures", post(review::sign))
         .route("/sessions/{id}/documents/{step_id}/export/docx", get(review::export_docx))
         .route("/sessions/{id}/documents/{step_id}/export/xlsx", get(review::export_xlsx))
+        .route("/sessions/{id}/documents/{step_id}/export/pdf", get(review::export_pdf))
         .route("/sessions/{id}/export", get(review::export_package))
         .route("/sessions/{id}/trace", get(trace::get))
         .route("/sessions/{id}/trace/write", post(trace::write))

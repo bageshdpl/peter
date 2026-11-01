@@ -2,6 +2,7 @@
 
 pub mod docx;
 pub mod markdown;
+pub mod pdf;
 pub mod xlsx;
 
 use std::collections::BTreeMap;

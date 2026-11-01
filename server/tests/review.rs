@@ -240,3 +240,96 @@ async fn session_package_zip() {
     let (s, _, _) = api.raw_get(&format!("/v1/sessions/{sid}/export"), &other).await;
     assert_eq!(s, StatusCode::NOT_FOUND);
 }
+
+/// A tiny RGBA PNG (transparent corners), for a logo with an alpha channel.
+fn rgba_png(w: u32, h: u32) -> Vec<u8> {
+    use std::io::Write;
+    let chunk = |out: &mut Vec<u8>, kind: &[u8], data: &[u8]| {
+        out.extend_from_slice(&(data.len() as u32).to_be_bytes());
+        let mut crc = flate2::Crc::new();
+        crc.update(kind);
+        crc.update(data);
+        out.extend_from_slice(kind);
+        out.extend_from_slice(data);
+        out.extend_from_slice(&crc.sum().to_be_bytes());
+    };
+    let mut raw = Vec::new();
+    for y in 0..h {
+        raw.push(if y % 2 == 0 { 0 } else { 2 }); // filters None and Up
+        for x in 0..w {
+            let corner = (x == 0 || x == w - 1) && (y == 0 || y == h - 1);
+            let px = [15u8, 118, 110, if corner { 0 } else { 255 }];
+            if y % 2 == 0 {
+                raw.extend_from_slice(&px);
+            } else {
+                // "Up": the difference from the row above, which has the same colour.
+                let above = [15u8, 118, 110, if (x == 0 || x == w - 1) && (y - 1 == 0) { 0 } else { 255 }];
+                raw.extend(px.iter().zip(above).map(|(a, b)| a.wrapping_sub(b)));
+            }
+        }
+    }
+    let mut z = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
+    z.write_all(&raw).unwrap();
+    let mut ihdr = Vec::new();
+    ihdr.extend_from_slice(&w.to_be_bytes());
+    ihdr.extend_from_slice(&h.to_be_bytes());
+    ihdr.extend_from_slice(&[8, 6, 0, 0, 0]);
+    let mut out = b"\x89PNG\r\n\x1a\n".to_vec();
+    chunk(&mut out, b"IHDR", &ihdr);
+    chunk(&mut out, b"IDAT", &z.finish().unwrap());
+    chunk(&mut out, b"IEND", &[]);
+    out
+}
+
+#[tokio::test]
+async fn pdf_export_has_the_same_content_as_word() {
+    let api = Api::new().await;
+    let (t, sid) = setup(&api).await;
+    api.call("POST", &format!("/v1/sessions/{sid}/documents/requirements/signatures"), Some(&t),
+        Some(json!({ "version": 2, "meaning": "approved", "password": "correct-horse-1" }))).await;
+    api.call("PUT", "/v1/workspace/branding", Some(&t),
+        Some(json!({ "company_name": "Acme Pharma Ltd", "doc_prefix": "ACME-CSV-", "footer_text": "Confidential - internal use only" }))).await;
+    let (s, b) = api.upload("/v1/workspace/branding/logo", &t, "logo.png", &rgba_png(40, 12)).await;
+    assert_eq!(s, StatusCode::OK, "{b}");
+
+    let (s, headers, bytes) = api.raw_get(&format!("/v1/sessions/{sid}/documents/requirements/export/pdf"), &t).await;
+    assert_eq!(s, StatusCode::OK);
+    assert_eq!(headers[header::CONTENT_TYPE], "application/pdf");
+    assert!(headers[header::CONTENT_DISPOSITION].to_str().unwrap().contains("User requirements and risk assessment v2.pdf"));
+    assert!(bytes.starts_with(b"%PDF-1.7") && bytes.ends_with(b"%%EOF\n"));
+    std::fs::write(std::env::temp_dir().join("peter-export-test.pdf"), &bytes).unwrap();
+
+    // Read back with an independent PDF reader.
+    let text = pdf_extract::extract_text_from_mem(&bytes).expect("a readable PDF");
+    let flat = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    for expected in [
+        "User requirements and risk assessment",
+        "FakeLIMS 8.2",
+        "Signed electronically in Peter",
+        "Approved",
+        "URS-001",
+        "GAP: audit trail not observed",
+        "[see Observe and gather sources]",
+        "Appendix A. Observed steps cited",
+        "Log in sample",
+        "Appendix B. Source files cited",
+        "SOP-QA-014.txt",
+        "Appendix C. Version history",
+        "Acme Pharma Ltd",
+        "Confidential - internal use only",
+        "Page 1 of",
+    ] {
+        assert!(flat.contains(expected), "missing {expected:?} in:\n{flat}");
+    }
+    assert!(flat.contains("open gap"), "gap warning on the cover");
+    let raw = String::from_utf8_lossy(&bytes);
+    // The screenshot (JPEG) and the logo (PNG with transparency).
+    assert!(raw.contains("/Filter /DCTDecode"));
+    assert!(raw.contains("/SMask"));
+    let pages = raw.matches("/Type /Page /Parent").count();
+    assert!(pages >= 3, "cover, body and appendices: {pages}");
+    assert!(raw.contains(&format!("Page {pages} of {pages}")) || flat.contains(&format!("Page {pages} of {pages}")));
+
+    let (_, audit) = api.call("GET", "/v1/audit?limit=1", Some(&t), None).await;
+    assert_eq!(audit["events"][0]["detail"]["format"], "pdf");
+}

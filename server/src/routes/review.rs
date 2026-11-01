@@ -371,6 +371,26 @@ pub async fn export_docx(
     attachment(bytes, DOCX, &export::file_name(&format!("{} v{}", doc.title, doc.version), "docx"))
 }
 
+pub async fn export_pdf(
+    State(state): State<AppState>,
+    auth: Auth,
+    Path((session_id, step_id)): Path<(String, String)>,
+    Query(q): Query<ExportQuery>,
+) -> AppResult<Response> {
+    let name = user_name(&state, &auth).await?;
+    let doc = export::load(&state, &auth.workspace_id, &name, &session_id, &step_id, q.version, true).await?;
+    let bytes = tokio::task::spawn_blocking(move || export::pdf::write(&doc).map(|b| (b, doc)))
+        .await
+        .map_err(|_| AppError::internal())?
+        .map_err(|e| {
+            tracing::error!(error = %e, "PDF export failed");
+            AppError::internal()
+        })?;
+    let (bytes, doc) = bytes;
+    audit_export(&state, &auth, &session_id, json!({ "step_id": step_id, "version": doc.version, "format": "pdf" })).await?;
+    attachment(bytes, "application/pdf", &export::file_name(&format!("{} v{}", doc.title, doc.version), "pdf"))
+}
+
 pub async fn export_xlsx(
     State(state): State<AppState>,
     auth: Auth,

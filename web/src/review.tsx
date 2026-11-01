@@ -8,11 +8,12 @@ import { messageOf, Notice, useAction } from "./ui";
 export function ExportButtons(props: { base: string; title: string; version: number; hasTables: boolean }) {
   const { base, title, version, hasTables } = props;
   const [error, setError] = useState<string | null>(null);
-  const get = (format: "docx" | "xlsx", name: string) =>
+  const get = (format: "docx" | "pdf" | "xlsx", name: string) =>
     downloadFile(`${base}/export/${format}?version=${version}`, name).catch((e) => setError(messageOf(e)));
   return (
     <div className="export-buttons">
       <button className="btn ghost" onClick={() => get("docx", `${title} v${version}.docx`)}>Word</button>
+      <button className="btn ghost" onClick={() => get("pdf", `${title} v${version}.pdf`)}>PDF</button>
       {hasTables && (
         <button className="btn ghost" onClick={() => get("xlsx", `${title} v${version} tables.xlsx`)}>Excel</button>
       )}

@@ -128,6 +128,11 @@ How drafting works:
   version can be exported.
 - **Excel export.** Every table in the document, one sheet each, with a frozen
   header row and filters.
+- **PDF export.** The same content as the Word export (cover, signatures,
+  body, appendices with screenshots, version history) with the logo, company
+  name, footer text, document number and page numbers on every page. Text
+  can be searched and copied. It uses the Liberation Sans fonts, embedded
+  under the SIL Open Font License (`server/fonts/LICENSE-Liberation.txt`).
 - **Session package.** A ZIP with every drafted document (Word, plus Excel
   where it has tables), all observed steps as CSV, and a README index.
 
@@ -398,6 +403,7 @@ stream adds `step` and `document` events.
 | `POST /v1/comments/{id}/resolve`, `/reopen` | its author, or member+ | threads only |
 | `POST /v1/sessions/{id}/documents/{step_id}/signatures` | member+ | `version` (the current one), `meaning` (`reviewed`/`approved`), `password` |
 | `GET /v1/sessions/{id}/documents/{step_id}/export/docx?version=` | member | Word file |
+| `GET /v1/sessions/{id}/documents/{step_id}/export/pdf?version=` | member | PDF file |
 | `GET /v1/sessions/{id}/documents/{step_id}/export/xlsx?version=` | member | Excel file of the tables (422 if none) |
 | `GET /v1/sessions/{id}/export` | member | ZIP package of the session |
 

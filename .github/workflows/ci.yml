@@ -79,9 +79,9 @@ jobs:
         run: docker build -t peter:ci .
       - name: Start a test S3 server
         run: |
-          pip install --quiet "moto[server]"
-          moto_server -H 127.0.0.1 -p 9000 > moto.log 2>&1 &
-          for i in $(seq 1 20); do curl -s http://127.0.0.1:9000 >/dev/null && break; sleep 1; done
+          docker run -d --name s3 --network host motoserver/moto:5.1.4 -p 9000
+          for i in $(seq 1 60); do curl -s http://127.0.0.1:9000 >/dev/null && break; sleep 1; done
+          curl -s http://127.0.0.1:9000 >/dev/null || { docker logs s3; exit 1; }
           AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test aws --endpoint-url http://127.0.0.1:9000 --region us-east-1 s3 mb s3://peter-backup
       - name: Start Peter, create data, then wipe the container
         run: |
@@ -125,4 +125,4 @@ jobs:
         run: |
           docker logs first 2>&1 | tail -50 || true
           docker logs second 2>&1 | tail -50 || true
-          tail -30 moto.log || true
+          docker logs s3 2>&1 | tail -30 || true

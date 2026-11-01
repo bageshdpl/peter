@@ -126,3 +126,21 @@ closed first. 6. Approval table with empty name, role, signature and date cells.
     };
     Some(DocumentSpec { title, instructions })
 }
+
+/// For learning a company's writing style from its own documents.
+pub const STYLE_SYSTEM: &str = "You study a regulated company's computer-system validation documents and describe \
+how the company writes them, so that new documents can be drafted in the same house style. Describe the style only. \
+Never copy facts from the samples: no system names, people, results, dates or numbers that belong to one document. \
+Write in plain English, as short Markdown bullet lists under these headings, and nothing else: \
+## Voice and wording, ## Document structure, ## Requirements, ## Test scripts, ## IDs and numbering, \
+## Level of detail, ## Terms the company uses. Under Test scripts, say how steps, expected results, actual results, \
+evidence and pass/fail are written. Where the samples disagree or say nothing about a heading, say so in one bullet. \
+Keep the whole guide under 450 words.";
+
+pub fn style_user_prompt(samples: &[(String, String)]) -> String {
+    let mut p = String::from("Describe the house style of these validation documents.\n");
+    for (i, (name, text)) in samples.iter().enumerate() {
+        p.push_str(&format!("\n# Sample {} ({name})\n{text}\n", i + 1));
+    }
+    p
+}

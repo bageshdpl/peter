@@ -173,6 +173,12 @@ Open **Library** in the sidebar. Everyone can see it; admins change it.
   order and table columns. One per document; uploading again replaces it
   (the old one is kept, hidden, as a record). You can preview exactly the
   text Peter reads.
+- **Writing style.** Add up to 10 approved documents your company wrote
+  before; Peter keeps only their text. **Learn the style** asks the AI to
+  describe how they are written (wording, structure, test-step format, IDs,
+  level of detail) without copying their facts, as a short guide you can
+  edit, or write one by hand. Every draft then follows it; the rules on
+  evidence and citations always come first.
 - **Branding.** Company name, logo (PNG or JPEG up to 1 MB), document number
   prefix and footer text. Every Word export then shows the logo and name in
   the page header, a document number such as `ACME-CSV-7F3A9C21-URS` on the
@@ -448,6 +454,11 @@ other calls answer `403` with code `mfa_setup_required`.
 | `POST /v1/library/templates` | admin | multipart: `file`, `step_id`, optional `name` |
 | `GET /v1/library/templates/{id}` | member | the text Peter reads from it |
 | `DELETE /v1/library/templates/{id}` | admin | stop using it |
+| `GET /v1/library/style` | member | the style guide and the sample documents |
+| `PUT /v1/library/style` | admin | `guide`: write or edit it by hand (empty stops using one) |
+| `POST /v1/library/style/samples` | admin | multipart `file`: add a past document |
+| `DELETE /v1/library/style/samples/{id}` | admin | remove a sample |
+| `POST /v1/library/style/learn` | admin | `provider`: learn the guide from the samples |
 | `GET /v1/workspace/branding`, `PUT` | member, admin | `company_name`, `doc_prefix`, `footer_text` |
 | `GET /v1/workspace/branding/logo`, `POST`, `DELETE` | member, admin | the logo (multipart `file` to upload) |
 

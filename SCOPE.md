@@ -66,7 +66,7 @@ Each module is decided on its own: in, later, or out.
 - The validation types and their steps above.
 - Move forward, back, or jump to a step; mark a step reviewed or skipped.
 
-### M4. AI drafting (done; testing-style preferences later)
+### M4. AI drafting (done; testing-style preferences done)
 - Provider layer: OpenRouter and Gemini first, any OpenAI-compatible API.
 - Start, stream, and stop a draft for a step; every claim cites an observation.
 - Chat with the session and with a single step.
@@ -106,7 +106,7 @@ Each module is decided on its own: in, later, or out.
 | M1 Projects and sessions | in |
 | M2 Observer extension | in (Chrome only) |
 | M3 Guided workflow | in, Initial validation only |
-| M4 AI drafting | in, without testing-style preferences |
+| M4 AI drafting | done, with testing-style preferences |
 | M5 Documents | in, Word export only |
 | M6 Library | later |
 | M7 Controls | done |

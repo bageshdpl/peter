@@ -505,3 +505,7 @@ textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 /* AI and usage */
 h3.sub { font-size: 0.95rem; margin: 1.1rem 0 0.4rem; }
 .error-text { color: var(--danger); font-size: 0.8rem; }
+
+/* Writing style */
+.style-guide { background: var(--surface-2); border-radius: 8px; padding: 0.25rem 1rem; }
+.style-guide h2 { font-size: 1rem; }

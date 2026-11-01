@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, atLeast, fetchBlobUrl, formatTime, uploadFile } from "../api";
 import { useSession } from "../App";
+import { WritingStyle } from "../style";
 import { messageOf, Notice, useAction } from "../ui";
 
-type Tab = "regulations" | "templates" | "branding";
+type Tab = "regulations" | "templates" | "style" | "branding";
 
 export default function Library() {
   const session = useSession()!;
@@ -21,10 +22,12 @@ export default function Library() {
       <div className="tabs" role="tablist">
         <button role="tab" aria-selected={tab === "regulations"} onClick={() => setTab("regulations")}>Regulations</button>
         <button role="tab" aria-selected={tab === "templates"} onClick={() => setTab("templates")}>Templates</button>
+        <button role="tab" aria-selected={tab === "style"} onClick={() => setTab("style")}>Writing style</button>
         <button role="tab" aria-selected={tab === "branding"} onClick={() => setTab("branding")}>Branding</button>
       </div>
       {tab === "regulations" && <Regulations canEdit={isAdmin} />}
       {tab === "templates" && <Templates canEdit={isAdmin} />}
+      {tab === "style" && <WritingStyle canEdit={isAdmin} />}
       {tab === "branding" && <Branding canEdit={isAdmin} />}
     </div>
   );

@@ -109,7 +109,7 @@ pub async fn get_template(State(state): State<AppState>, auth: Auth, Path(id): P
 }
 
 /// Reads one multipart upload: the file's name and bytes, plus other text fields.
-async fn read_upload(mut multipart: Multipart, max: usize) -> AppResult<(String, Vec<u8>, std::collections::HashMap<String, String>)> {
+pub(super) async fn read_upload(mut multipart: Multipart, max: usize) -> AppResult<(String, Vec<u8>, std::collections::HashMap<String, String>)> {
     let bad = |m: String| AppError::bad_request("invalid_upload", m);
     let mut fields = std::collections::HashMap::new();
     let mut file: Option<(String, Vec<u8>)> = None;

@@ -20,6 +20,7 @@ const MAX_ALL_SOURCE_CHARS: usize = 48_000;
 const MAX_DOCUMENT_CHARS: usize = 8_000;
 const MAX_TEMPLATE_CHARS: usize = 10_000;
 const MAX_CONTROLS: usize = 200;
+const MAX_STYLE_CHARS: usize = 6_000;
 
 #[derive(Debug, Clone, Serialize, serde::Deserialize)]
 pub struct SourceRef {
@@ -41,6 +42,8 @@ pub struct Evidence {
     pub template: Option<(String, String)>,
     /// The project's SOP controls: (CTL-001, statement).
     pub controls: Vec<(String, String)>,
+    /// The company's writing style guide, from the Library.
+    pub style: Option<String>,
 }
 
 pub struct ObservationLine {
@@ -199,7 +202,26 @@ pub async fn gather(state: &AppState, session_id: &str, step_id: &str) -> Result
         None => Vec::new(),
     };
 
-    Ok(Evidence { project, session_title: title, type_title: kind.title.to_string(), observations, sources, documents, standards, template, controls })
+    let style: Option<String> = sqlx::query_as::<_, (String,)>("SELECT guide FROM workspace_style WHERE workspace_id = ?")
+        .bind(&workspace_id)
+        .fetch_optional(&state.db)
+        .await
+        .map_err(db_err)?
+        .map(|(g,)| g.chars().take(MAX_STYLE_CHARS).collect())
+        .filter(|g: &String| !g.trim().is_empty());
+
+    Ok(Evidence {
+        project,
+        session_title: title,
+        type_title: kind.title.to_string(),
+        observations,
+        sources,
+        documents,
+        standards,
+        template,
+        controls,
+        style,
+    })
 }
 
 pub fn user_prompt(evidence: &Evidence, spec: &prompts::DocumentSpec, extra: &str) -> String {
@@ -214,6 +236,12 @@ pub fn user_prompt(evidence: &Evidence, spec: &prompts::DocumentSpec, extra: &st
             "\n# Company template\nThe company writes this document using its template \"{name}\". Follow its section \
 headings, their order and its table columns, and keep its wording for fixed text such as purpose statements. \
 Placeholders in the template are not evidence. Template text:\n\n{text}\n"
+        ));
+    }
+    if let Some(style) = &evidence.style {
+        p.push_str(&format!(
+            "\n# Company writing style\nWrite in the company's house style, described below. It decides wording, \
+structure and level of detail only: the rules on evidence, citations and gaps always come first.\n\n{style}\n"
         ));
     }
     p.push_str(&crate::standards::prompt_section(&evidence.standards));
@@ -354,6 +382,9 @@ Choose an AI provider to draft the real text.\n\n## Evidence available\n\n",
     if let Some((name, _)) = &evidence.template {
         d.push_str(&format!("\n## Company template\n\nDrafts follow the company template \"{name}\" from the Library.\n"));
     }
+    if evidence.style.is_some() {
+        d.push_str("\n## Writing style\n\nDrafts follow the company's writing style from the Library.\n");
+    }
     if !evidence.controls.is_empty() {
         d.push_str(&format!("\n## Company controls\n\n{} controls from the project's SOPs: {}\n", evidence.controls.len(),
             evidence.controls.iter().map(|(id, _)| id.as_str()).collect::<Vec<_>>().join(", ")));
@@ -456,7 +487,7 @@ async fn draft(state: &AppState, job: &DraftJob) -> Result<(i64, String, Value),
         let effective = crate::workspace_ai::effective(state, &job.workspace_id).await?;
         let source = effective.source(&job.provider).ok_or("That AI provider has no key for this workspace.")?;
         let result = ai::complete(&effective.config, &job.provider, Prompt { system: prompts::SYSTEM, user: &user }).await;
-        crate::workspace_ai::record(state, job, source, &result).await;
+        crate::workspace_ai::record(state, job.into(), source, &result).await;
         result?
     };
     let body = unwrap_fence(&completion.text);

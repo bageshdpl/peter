@@ -13,6 +13,7 @@ mod review;
 mod security;
 mod sessions;
 mod sharing;
+mod style;
 mod sources;
 mod trace;
 mod workspace;
@@ -131,6 +132,13 @@ pub fn router(max_upload_bytes: usize) -> Router<AppState> {
         .route("/workspace/ai/usage", get(ai_settings::usage))
         .route("/workspace/ai/{provider}", axum::routing::put(ai_settings::set_key).delete(ai_settings::remove_key))
         .route("/workspace/ai/{provider}/check", post(ai_settings::check))
+        .route("/library/style", get(style::get).put(style::set_guide))
+        .route("/library/style/learn", post(style::learn))
+        .route(
+            "/library/style/samples",
+            post(style::add_sample).layer(DefaultBodyLimit::max(10 * 1024 * 1024 + 64 * 1024)),
+        )
+        .route("/library/style/samples/{sample_id}", delete(style::remove_sample))
         .route("/meta", get(meta::meta))
         .route("/extension/download", get(meta::extension_zip))
         .fallback(|| async { AppError::not_found("No such API endpoint.") })

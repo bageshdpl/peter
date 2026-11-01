@@ -120,8 +120,29 @@ pub async fn shared_tokens_this_month(state: &AppState, workspace_id: &str) -> A
     Ok(n)
 }
 
+/// Who made an AI call, and for what.
+pub struct CallFor<'a> {
+    pub workspace_id: &'a str,
+    pub user_id: &'a str,
+    pub session_id: Option<&'a str>,
+    pub step_id: Option<&'a str>,
+    pub provider: &'a str,
+}
+
+impl<'a> From<&'a DraftJob> for CallFor<'a> {
+    fn from(job: &'a DraftJob) -> Self {
+        Self {
+            workspace_id: &job.workspace_id,
+            user_id: &job.user_id,
+            session_id: Some(&job.session_id),
+            step_id: Some(&job.step_id),
+            provider: &job.provider,
+        }
+    }
+}
+
 /// Keeps a record of an AI call, whether it worked or not.
-pub async fn record(state: &AppState, job: &DraftJob, source: &str, result: &Result<Completion, String>) {
+pub async fn record(state: &AppState, job: CallFor<'_>, source: &str, result: &Result<Completion, String>) {
     let (model, prompt, completion, cost, error) = match result {
         Ok(c) => (c.model.clone(), c.prompt_tokens, c.completion_tokens, c.cost_usd, None),
         Err(e) => (String::new(), None, None, None, Some(e.chars().take(500).collect::<String>())),
@@ -131,11 +152,11 @@ pub async fn record(state: &AppState, job: &DraftJob, source: &str, result: &Res
          prompt_tokens, completion_tokens, cost_usd, ok, error, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(new_id())
-    .bind(&job.workspace_id)
-    .bind(&job.user_id)
-    .bind(&job.session_id)
-    .bind(&job.step_id)
-    .bind(&job.provider)
+    .bind(job.workspace_id)
+    .bind(job.user_id)
+    .bind(job.session_id)
+    .bind(job.step_id)
+    .bind(job.provider)
     .bind(model)
     .bind(source)
     .bind(prompt)

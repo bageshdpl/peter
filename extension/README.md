@@ -8,10 +8,10 @@ Plain JavaScript, no build step. Chrome 116 or later.
 
 ## Install (unpacked)
 
-1. Start the Peter API and web app (see `apps/peter/README.md`).
+1. Start the Peter API and web app (see the main `README.md`).
 2. In Chrome, open `chrome://extensions`.
 3. Turn on **Developer mode** (top right).
-4. Click **Load unpacked** and choose this folder (`apps/peter/extension`).
+4. Click **Load unpacked** and choose this folder (`extension` in the Peter repo).
 5. Pin **Peter Observer** to the toolbar if you like.
 
 After changing the files, click the reload icon on the extension's card, then

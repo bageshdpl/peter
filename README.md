@@ -9,13 +9,20 @@ it does and the build plan.
 | Web app (React) | `web/` | sign-in, projects, guided sessions with AI drafts, comments, signatures, exports, members, audit trail, settings |
 | Observer extension | `extension/` | records steps and screenshots into a session ([setup](extension/README.md)) |
 
+## Get the code
+
+```bash
+git clone https://github.com/bageshdpl/peter.git
+cd peter
+```
+
 ## Run the API locally
 
 Install Rust once (Windows: `winget install Rustlang.Rustup`; macOS and Linux:
 see https://rustup.rs). Then:
 
 ```bash
-cd apps/peter/server
+cd server
 cargo run
 ```
 
@@ -106,7 +113,7 @@ Every export is recorded in the audit trail.
 Needs Node.js 22 or later. With the API running in another terminal:
 
 ```bash
-cd apps/peter/web
+cd web
 npm install
 npm run dev
 ```

@@ -194,7 +194,7 @@ export function ObservationPanel(props: {
             <span className="muted">Looking for the extension…</span>
           ) : !ext.installed ? (
             <span className="muted">
-              The Peter Observer extension is not installed in this browser. See <code>apps/peter/extension/README.md</code> to
+              The Peter Observer extension is not installed in this browser. See <code>extension/README.md</code> to
               add it.
             </span>
           ) : targetsThis ? (

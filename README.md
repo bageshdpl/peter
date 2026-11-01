@@ -6,7 +6,7 @@ it does and the build plan.
 | Part | Folder | Status |
 | --- | --- | --- |
 | API server (Rust) | `server/` | M0 Foundation done |
-| Web app (React) | `web/` | not started |
+| Web app (React) | `web/` | sign-in, members, audit trail, settings |
 | Observer extension | `extension/` | not started |
 
 ## Run the API locally
@@ -28,6 +28,28 @@ Run the tests:
 ```bash
 cargo test
 ```
+
+## Run the web app locally
+
+Needs Node.js 22 or later. With the API running in another terminal:
+
+```bash
+cd apps/peter/web
+npm install
+npm run dev
+```
+
+Open http://localhost:5173 and create an account. The web app forwards `/v1`
+calls to the API at `http://127.0.0.1:8080`; set `PETER_API_URL` to change
+that.
+
+Screens: sign in, create account, forgot and reset password, accept an invite,
+home, members (invite, change roles, remove, withdraw invites), audit trail,
+and settings (change password, rename the workspace, create another
+workspace). The workspace switcher is in the sidebar.
+
+Invites show their link on screen, so you can test with a second browser
+window (or a private window) without email.
 
 ### Settings
 

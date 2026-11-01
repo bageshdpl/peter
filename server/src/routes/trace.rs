@@ -23,14 +23,14 @@ use crate::{
 /// The steps whose documents feed the matrix.
 const SOURCES: &[&str] = &["requirements", "specification", "configuration", "installation", "testing"];
 
-struct Loaded {
-    title: String,
-    archived: bool,
-    docs: BTreeMap<String, String>,
+pub(super) struct Loaded {
+    pub(super) title: String,
+    pub(super) archived: bool,
+    pub(super) docs: BTreeMap<String, String>,
     built_from: Vec<(String, String, i64)>,
 }
 
-async fn load(state: &AppState, auth: &Auth, session_id: &str) -> AppResult<Loaded> {
+pub(super) async fn load(state: &AppState, auth: &Auth, session_id: &str) -> AppResult<Loaded> {
     let row: Option<(String, Option<i64>)> =
         sqlx::query_as("SELECT title, archived_at FROM validation_sessions WHERE id = ? AND workspace_id = ?")
             .bind(session_id)

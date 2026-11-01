@@ -1,5 +1,6 @@
 mod audit;
 mod auth;
+mod controls;
 mod documents;
 mod extension;
 mod library;
@@ -110,6 +111,12 @@ pub fn router(max_upload_bytes: usize) -> Router<AppState> {
         )
         .route("/library/templates/{template_id}", get(library::get_template).delete(library::remove_template))
         .route("/workspace/branding", get(library::get_branding).put(library::set_branding))
+        .route("/projects/{id}/controls", get(controls::list).post(controls::create))
+        .route("/projects/{id}/controls/{control_id}", delete(controls::remove))
+        .route("/projects/{id}/sources/{source_id}/controls", post(controls::extract))
+        .route("/sessions/{id}/controls", get(controls::coverage))
+        .route("/sessions/{id}/controls/export", get(controls::export_xlsx))
+        .route("/sessions/{id}/controls/{key}", axum::routing::put(controls::decide))
         .route("/meta", get(meta::meta))
         .route("/extension/download", get(meta::extension_zip))
         .fallback(|| async { AppError::not_found("No such API endpoint.") })

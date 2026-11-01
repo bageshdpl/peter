@@ -81,7 +81,7 @@ Each module is decided on its own: in, later, or out.
 - Templates, reference documents, standards (for example 21 CFR Part 11, EU Annex 11, GAMP 5).
 - Workspace branding: logo, document header and footer template.
 
-### M7. Controls
+### M7. Controls (done)
 - Extract controls from SOPs and standards; map them to requirements; coverage view.
 
 ### M8. Sharing and collaboration
@@ -109,7 +109,7 @@ Each module is decided on its own: in, later, or out.
 | M4 AI drafting | in, without testing-style preferences |
 | M5 Documents | in, Word export only |
 | M6 Library | later |
-| M7 Controls | later |
+| M7 Controls | done |
 | M8 Sharing | later |
 | M9 Administration | password reset and audit trail in; the rest later or out |
 

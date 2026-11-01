@@ -16,6 +16,9 @@ pub struct Requirement {
     pub gxp_critical: String,
     pub risk: String,
     pub evidence: Vec<String>,
+    /// Every cell of the row, for finding the controls it names.
+    #[serde(skip)]
+    pub row_text: String,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -186,6 +189,7 @@ pub fn requirements(body: &str) -> Vec<Requirement> {
                 gxp_critical: cell(gxp),
                 risk: cell(risk).to_lowercase(),
                 evidence: ev.into_iter().collect(),
+                row_text: row.iter().map(|c| plain(c)).collect::<Vec<_>>().join(" | "),
             });
         }
     }

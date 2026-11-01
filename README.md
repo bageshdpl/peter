@@ -173,6 +173,30 @@ Open **Library** in the sidebar. Everyone can see it; admins change it.
   the page header, a document number such as `ACME-CSV-7F3A9C21-URS` on the
   cover, and the footer text on every page.
 
+## Controls
+
+Controls are what your SOPs and the regulations require of a system. Peter
+follows each one through the requirements to their tests.
+
+- **Your SOPs' controls.** On a project page, under **Controls**, choose a
+  source file and click **Find controls**. Peter reads its "shall", "must" and
+  "is required to" statements (with their section numbers) and numbers them
+  CTL-001, CTL-002 and so on. Remove any that do not apply, or add your own by
+  hand. Numbers are never reused.
+- **Regulations.** Every clause of the regulations chosen in the Library is a
+  control too (GAMP 5 categories are left out: they classify software rather
+  than require anything of it).
+- **Coverage.** In a session, the **Traceability matrix** step shows each
+  control as Met, Failed, Not yet executed, No test, Not covered or Not
+  applicable. A requirement covers a control when its row names it, such as
+  "(21 CFR 11.10(e))", "(Annex 11, clause 9)" or "(CTL-003)". AI drafts of the
+  requirements now write these names. You can also link requirements by hand,
+  or mark a control not applicable with the reason; both go in the audit
+  trail. **Excel** exports the whole list.
+
+Like the matrix, this is built by plain rules, not AI, so the same documents
+always give the same result.
+
 ## Security
 
 Open **Security** in the sidebar.
@@ -382,6 +406,18 @@ other calls answer `403` with code `mfa_setup_required`.
 | `DELETE /v1/library/templates/{id}` | admin | stop using it |
 | `GET /v1/workspace/branding`, `PUT` | member, admin | `company_name`, `doc_prefix`, `footer_text` |
 | `GET /v1/workspace/branding/logo`, `POST`, `DELETE` | member, admin | the logo (multipart `file` to upload) |
+
+## API (controls)
+
+| Method and path | Who | What |
+| --- | --- | --- |
+| `GET /v1/projects/{id}/controls` | viewer | the project's SOP controls |
+| `POST /v1/projects/{id}/controls` | member | `text`, optional `section`: add one by hand |
+| `POST /v1/projects/{id}/sources/{source_id}/controls` | member | find and add the file's "shall" and "must" statements |
+| `DELETE /v1/projects/{id}/controls/{control_id}` | member | remove one (kept, hidden, as a record) |
+| `GET /v1/sessions/{id}/controls` | viewer | coverage of every control, and the session's requirements |
+| `PUT /v1/sessions/{id}/controls/{key}` | member | `requirements` (URS ids), `not_applicable`, `reason` |
+| `GET /v1/sessions/{id}/controls/export` | viewer | the coverage as Excel |
 
 ### Roles
 

@@ -19,6 +19,7 @@ const MAX_SOURCE_CHARS: usize = 12_000;
 const MAX_ALL_SOURCE_CHARS: usize = 48_000;
 const MAX_DOCUMENT_CHARS: usize = 8_000;
 const MAX_TEMPLATE_CHARS: usize = 10_000;
+const MAX_CONTROLS: usize = 200;
 
 #[derive(Debug, Clone, Serialize, serde::Deserialize)]
 pub struct SourceRef {
@@ -38,6 +39,8 @@ pub struct Evidence {
     pub standards: Vec<String>,
     /// The company's template for this step, if one is in the Library: (name, text).
     pub template: Option<(String, String)>,
+    /// The project's SOP controls: (CTL-001, statement).
+    pub controls: Vec<(String, String)>,
 }
 
 pub struct ObservationLine {
@@ -181,7 +184,22 @@ pub async fn gather(state: &AppState, session_id: &str, step_id: &str) -> Result
     .await
     .map_err(db_err)?;
 
-    Ok(Evidence { project, session_title: title, type_title: kind.title.to_string(), observations, sources, documents, standards, template })
+    let controls: Vec<(String, String)> = match &project_id {
+        Some(pid) => sqlx::query_as::<_, (i64, String)>(
+            "SELECT number, text FROM project_controls WHERE project_id = ? AND archived_at IS NULL ORDER BY number LIMIT ?",
+        )
+        .bind(pid)
+        .bind(MAX_CONTROLS as i64)
+        .fetch_all(&state.db)
+        .await
+        .map_err(db_err)?
+        .into_iter()
+        .map(|(n, text)| (crate::controls::reference(n), text.chars().take(300).collect()))
+        .collect(),
+        None => Vec::new(),
+    };
+
+    Ok(Evidence { project, session_title: title, type_title: kind.title.to_string(), observations, sources, documents, standards, template, controls })
 }
 
 pub fn user_prompt(evidence: &Evidence, spec: &prompts::DocumentSpec, extra: &str) -> String {
@@ -199,6 +217,16 @@ Placeholders in the template are not evidence. Template text:\n\n{text}\n"
         ));
     }
     p.push_str(&crate::standards::prompt_section(&evidence.standards));
+    if !evidence.controls.is_empty() {
+        p.push_str(
+            "\n# Company controls\nControls the company's SOPs require, from the project's Controls list. Where a requirement \
+meets one, name its ID in the requirement's row, for example \"(CTL-003)\", because Peter reads these IDs to show which \
+controls are covered. Controls are not evidence: still cite observed steps, sources and documents for facts.\n",
+        );
+        for (id, text) in &evidence.controls {
+            p.push_str(&format!("- {id}: {text}\n"));
+        }
+    }
     p.push_str("\n# System under validation\n");
     p.push_str(&format!("Session: {}\n", evidence.session_title));
     match &evidence.project {
@@ -325,6 +353,10 @@ Choose an AI provider to draft the real text.\n\n## Evidence available\n\n",
     }
     if let Some((name, _)) = &evidence.template {
         d.push_str(&format!("\n## Company template\n\nDrafts follow the company template \"{name}\" from the Library.\n"));
+    }
+    if !evidence.controls.is_empty() {
+        d.push_str(&format!("\n## Company controls\n\n{} controls from the project's SOPs: {}\n", evidence.controls.len(),
+            evidence.controls.iter().map(|(id, _)| id.as_str()).collect::<Vec<_>>().join(", ")));
     }
     if !evidence.standards.is_empty() {
         let names: Vec<&str> = evidence.standards.iter().filter_map(|id| crate::standards::find(id).map(|s| s.name)).collect();

@@ -5,6 +5,7 @@ import {
   type Project, type Source, type ValidationSession,
 } from "../api";
 import { useSession } from "../App";
+import { ProjectControls } from "../controls";
 import { NewSessionForm, SessionTable } from "../sessions";
 import { Field, messageOf, Notice, useAction } from "../ui";
 
@@ -107,6 +108,7 @@ export default function ProjectPage() {
       </section>
 
       <Sources projectId={project.id} canWrite={canWrite} onChange={load} />
+      <ProjectControls projectId={project.id} canWrite={canWrite} sourceCount={project.source_count} />
 
       <p className="muted small">Created by {project.created_by_name} on {formatTime(project.created_at)}.</p>
     </div>

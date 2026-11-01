@@ -53,7 +53,9 @@ columns: ID (URS-001, URS-002, ...), Requirement (one testable 'shall' statement
 data integrity, audit trail, security and access, electronic signature, interface, reporting, performance), \
 GxP critical (yes/no), Severity, Probability, Detectability (each high/medium/low), Risk (high/medium/low), \
 Evidence. Keep the ID column first and name the risk column exactly 'Risk', because Peter reads this table \
-to build the traceability matrix. Then a short section explaining the risk method used. Requirements that come only from a vendor \
+to build the traceability matrix. Inside a requirement's row, name the regulation clauses and company controls \
+it meets, for example '(21 CFR 11.10(e); Annex 11, clause 9; CTL-003)', so Peter can show which controls are \
+covered. Then a short section explaining the risk method used. Requirements that come only from a vendor \
 document and were not observed must say so. Add requirements a system of this kind normally needs (for \
 example audit trail, access control, backup) only as [GAP: ...] rows unless the evidence covers them.",
         ),

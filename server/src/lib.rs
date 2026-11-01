@@ -3,6 +3,7 @@
 pub mod ai;
 pub mod auth;
 pub mod catalog;
+pub mod controls;
 pub mod drafting;
 pub mod error;
 pub mod export;

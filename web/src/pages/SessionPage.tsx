@@ -8,6 +8,7 @@ import { useSession } from "../App";
 import { DocumentPanel } from "../document";
 import { useSessionEvents } from "../events";
 import { ObservationPanel } from "../observe";
+import { ControlsPanel } from "../controls";
 import { TracePanel } from "../trace";
 import { messageOf, Notice } from "../ui";
 
@@ -217,7 +218,10 @@ export default function SessionPage() {
             </section>
 
             {viewing.id === "traceability" && (
-              <TracePanel sessionId={session.id} sessionTitle={session.title} canWrite={canWrite} events={events} onGoToStep={goTo} />
+              <>
+                <TracePanel sessionId={session.id} sessionTitle={session.title} canWrite={canWrite} events={events} onGoToStep={goTo} />
+                <ControlsPanel sessionId={session.id} sessionTitle={session.title} projectId={session.project_id} canWrite={canWrite} events={events} />
+              </>
             )}
 
             {viewing.id === "observe" && (

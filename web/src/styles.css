@@ -464,3 +464,20 @@ textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 .logo-box { width: 200px; height: 72px; border: 1px dashed var(--border); border-radius: 8px; display: grid; place-items: center; background: #fff; overflow: hidden; }
 .logo-box img { max-width: 100%; max-height: 100%; object-fit: contain; }
 .reg-head .link-btn { white-space: nowrap; }
+
+/* Controls */
+.control-group { margin-top: 1rem; }
+.control-group h3 { font-size: 0.95rem; margin: 0 0 0.4rem; }
+.control-editor { display: flex; flex-direction: column; gap: 0.6rem; background: var(--surface-2); border-radius: 8px; padding: 0.75rem; }
+.control-editor p { margin: 0; }
+.control-editor fieldset { border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem 0.75rem; margin: 0; min-width: 0; }
+.control-editor fieldset:disabled { opacity: 0.55; }
+.control-editor legend { font-size: 0.85rem; font-weight: 600; padding: 0 0.25rem; }
+.req-picks { display: flex; flex-direction: column; gap: 0.3rem; max-height: 260px; overflow-y: auto; }
+.req-pick { display: flex; gap: 0.5rem; align-items: flex-start; font-size: 0.85rem; cursor: pointer; }
+.req-pick input { margin-top: 0.2rem; min-height: 0; }
+.req-pick.found { color: var(--muted); }
+.req-pick.missing { color: var(--danger); }
+.find-controls { display: flex; gap: 0.75rem; align-items: flex-end; flex-wrap: wrap; margin-bottom: 0.75rem; }
+.find-controls .field { flex: 1 1 260px; margin: 0; }
+.find-controls select { width: 100%; }

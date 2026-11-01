@@ -15,6 +15,8 @@ export interface Session {
   user: User;
   workspace: Workspace;
   workspaces: Workspace[];
+  /** The workspace requires two-factor sign-in and this person has not set it up. */
+  mfa_setup_required?: boolean;
 }
 export interface Member { user_id: string; email: string; name: string; role: Role; joined_at: number }
 export interface Invite { id: string; email: string; role: Role; created_at: number; expires_at: number }
@@ -315,12 +317,23 @@ export async function startSession(path: string, body: unknown): Promise<Session
   return s;
 }
 
+/**
+ * Signs in with email and password. With two-factor sign-in on, the answer is
+ * a short-lived ticket for the code step instead of a session.
+ */
+export async function signIn(email: string, password: string): Promise<{ mfaToken: string } | null> {
+  const res = await api<Session | { mfa_required: true; mfa_token: string }>("POST", "/v1/auth/login", { email, password });
+  if ("mfa_required" in res) return { mfaToken: res.mfa_token };
+  setSession(res);
+  return null;
+}
+
 /** Re-reads your name, role and workspaces after they may have changed. */
 export async function reloadSession() {
-  const me = await api<{ user: User; workspace: Workspace | null; workspaces: Workspace[] }>("GET", "/v1/auth/me");
+  const me = await api<{ user: User; workspace: Workspace | null; workspaces: Workspace[]; mfa_setup_required: boolean }>("GET", "/v1/auth/me");
   const current = session;
   if (current && me.workspace) {
-    setSession({ ...current, user: me.user, workspace: me.workspace, workspaces: me.workspaces });
+    setSession({ ...current, user: me.user, workspace: me.workspace, workspaces: me.workspaces, mfa_setup_required: me.mfa_setup_required });
   }
 }
 

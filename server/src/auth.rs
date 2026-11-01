@@ -1,6 +1,9 @@
 //! Sessions, the authenticated-request extractor, and the audit trail.
 
-use axum::{extract::FromRequestParts, http::request::Parts};
+use axum::{
+    extract::{FromRequestParts, OriginalUri},
+    http::{HeaderMap, StatusCode, header, request::Parts},
+};
 use serde::Serialize;
 use serde_json::Value;
 use sqlx::{Sqlite, SqliteConnection, Transaction};
@@ -44,10 +47,12 @@ impl FromRequestParts<AppState> for Auth {
             .ok_or_else(|| AppError::unauthorized("Use a Bearer token."))?;
 
         // The membership join means a removed member loses access at once.
-        let row: Option<(String, String, String, String)> = sqlx::query_as(
-            "SELECT s.id, s.user_id, s.workspace_id, m.role
+        let row: Option<(String, String, String, String, bool, bool)> = sqlx::query_as(
+            "SELECT s.id, s.user_id, s.workspace_id, m.role, w.require_mfa, (um.enabled_at IS NOT NULL)
              FROM sessions s
              JOIN memberships m ON m.workspace_id = s.workspace_id AND m.user_id = s.user_id
+             JOIN workspaces w ON w.id = s.workspace_id
+             LEFT JOIN user_mfa um ON um.user_id = s.user_id
              WHERE s.access_hash = ? AND s.revoked_at IS NULL AND s.access_expires_at > ?",
         )
         .bind(hash_token(token))
@@ -55,8 +60,23 @@ impl FromRequestParts<AppState> for Auth {
         .fetch_optional(&state.db)
         .await?;
 
-        let (session_id, user_id, workspace_id, role) =
+        let (session_id, user_id, workspace_id, role, require_mfa, has_mfa) =
             row.ok_or_else(|| AppError::unauthorized("Your sign-in has expired. Sign in again."))?;
+
+        // A workspace that requires two-factor sign-in lets people without it
+        // do nothing except set it up (or leave, or switch workspace).
+        if require_mfa && !has_mfa {
+            let path = parts.extensions.get::<OriginalUri>().map(|u| u.path().to_string()).unwrap_or_else(|| parts.uri.path().to_string());
+            let allowed = ["/v1/auth/me", "/v1/auth/logout", "/v1/auth/mfa", "/v1/auth/mfa/setup", "/v1/auth/mfa/enable",
+                "/v1/auth/workspaces", "/v1/auth/switch", "/v1/auth/sessions"];
+            if !allowed.contains(&path.as_str()) {
+                return Err(AppError::new(
+                    StatusCode::FORBIDDEN,
+                    "mfa_setup_required",
+                    "This workspace requires two-factor sign-in. Set it up in Settings to continue.",
+                ));
+            }
+        }
         Ok(Auth { session_id, user_id, workspace_id, role: Role::parse(&role)? })
     }
 }
@@ -68,14 +88,21 @@ pub struct Tokens {
     pub expires_in: i64,
 }
 
+/// The browser or app making a request, as it describes itself (for the
+/// list of active sessions).
+pub fn user_agent(headers: &HeaderMap) -> String {
+    headers.get(header::USER_AGENT).and_then(|v| v.to_str().ok()).unwrap_or("").chars().take(300).collect()
+}
+
 /// Starts a web session for a user in a workspace they belong to.
 pub async fn start_session(
     conn: &mut SqliteConnection,
     state: &AppState,
     user_id: &str,
     workspace_id: &str,
+    user_agent: &str,
 ) -> AppResult<Tokens> {
-    start_client_session(conn, state, user_id, workspace_id, "web").await
+    start_client_session(conn, state, user_id, workspace_id, "web", user_agent).await
 }
 
 /// Starts a session for a particular client (`web` or `extension`).
@@ -85,13 +112,15 @@ pub async fn start_client_session(
     user_id: &str,
     workspace_id: &str,
     client: &str,
+    user_agent: &str,
 ) -> AppResult<Tokens> {
     let (access, refresh) = (new_token(), new_token());
     let t = now();
     sqlx::query(
         "INSERT INTO sessions
-         (id, user_id, workspace_id, access_hash, access_expires_at, refresh_hash, refresh_expires_at, created_at, client)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+         (id, user_id, workspace_id, access_hash, access_expires_at, refresh_hash, refresh_expires_at, created_at, client,
+          user_agent, last_used_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(new_id())
     .bind(user_id)
@@ -102,6 +131,8 @@ pub async fn start_client_session(
     .bind(t + state.config.refresh_ttl_secs)
     .bind(t)
     .bind(client)
+    .bind(user_agent)
+    .bind(t)
     .execute(&mut *conn)
     .await?;
     Ok(Tokens { access_token: access, refresh_token: refresh, expires_in: state.config.access_ttl_secs })
@@ -112,13 +143,14 @@ pub async fn rotate_session(conn: &mut SqliteConnection, state: &AppState, sessi
     let (access, refresh) = (new_token(), new_token());
     let t = now();
     sqlx::query(
-        "UPDATE sessions SET access_hash = ?, access_expires_at = ?, refresh_hash = ?, refresh_expires_at = ?
-         WHERE id = ?",
+        "UPDATE sessions SET access_hash = ?, access_expires_at = ?, refresh_hash = ?, refresh_expires_at = ?,
+         last_used_at = ? WHERE id = ?",
     )
     .bind(hash_token(&access))
     .bind(t + state.config.access_ttl_secs)
     .bind(hash_token(&refresh))
     .bind(t + state.config.refresh_ttl_secs)
+    .bind(t)
     .bind(session_id)
     .execute(&mut *conn)
     .await?;

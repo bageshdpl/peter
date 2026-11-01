@@ -87,7 +87,7 @@ Each module is decided on its own: in, later, or out.
 ### M8. Sharing and collaboration
 - Share a document or session with a person; "shared with me"; notifications count.
 
-### M9. Administration and enterprise
+### M9. Administration and enterprise (sign-in limits, two-factor sign-in and active sessions done)
 - Two-factor sign-in, password reset, change password.
 - Audit trail of every change.
 - Security settings, usage summary.

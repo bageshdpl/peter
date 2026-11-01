@@ -38,7 +38,11 @@ pub struct ExchangeBody {
     code: String,
 }
 
-pub async fn exchange(State(state): State<AppState>, Body(body): Body<ExchangeBody>) -> AppResult<Json<SessionView>> {
+pub async fn exchange(
+    State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
+    Body(body): Body<ExchangeBody>,
+) -> AppResult<Json<SessionView>> {
     let mut tx = state.db.begin().await?;
     let row: Option<(String, String, String)> = sqlx::query_as(
         "SELECT c.id, c.user_id, c.workspace_id FROM extension_codes c
@@ -52,7 +56,7 @@ pub async fn exchange(State(state): State<AppState>, Body(body): Body<ExchangeBo
     let (code_id, user_id, workspace_id) = row
         .ok_or_else(|| AppError::bad_request("invalid_code", "This connect code has expired or was already used. Connect again from Peter."))?;
     sqlx::query("UPDATE extension_codes SET used_at = ? WHERE id = ?").bind(now()).bind(&code_id).execute(&mut *tx).await?;
-    let tokens = start_client_session(&mut tx, &state, &user_id, &workspace_id, "extension").await?;
+    let tokens = start_client_session(&mut tx, &state, &user_id, &workspace_id, "extension", &crate::auth::user_agent(&headers)).await?;
     audit(&mut tx, Some(&workspace_id), Some(&user_id), "extension.connected", None, json!({})).await?;
     let view = session_view(&mut tx, tokens, &user_id, &workspace_id).await?;
     tx.commit().await?;

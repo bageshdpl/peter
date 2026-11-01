@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { api, clearHash, readHashToken, startSession } from "../api";
+import { api, clearHash, readHashToken, signIn, startSession } from "../api";
 import { AuthCard, Field, Notice, PASSWORD_HINT, useAction } from "../ui";
 
 export function SignIn() {
@@ -9,7 +9,53 @@ export function SignIn() {
   const from = (location.state as { from?: string } | null)?.from ?? "/";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const { busy, error, run } = useAction();
+  const [mfaToken, setMfaToken] = useState<string | null>(null);
+  const [code, setCode] = useState("");
+  const [useRecovery, setUseRecovery] = useState(false);
+  const { busy, error, setError, run } = useAction();
+
+  if (mfaToken) {
+    return (
+      <AuthCard title="Two-factor sign-in">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            run(async () => {
+              await startSession("/v1/auth/login/mfa", useRecovery ? { mfa_token: mfaToken, recovery_code: code } : { mfa_token: mfaToken, code });
+              navigate(from, { replace: true });
+            });
+          }}
+        >
+          {error && <Notice kind="error">{error}</Notice>}
+          <p className="muted">
+            {useRecovery ? "Enter one of the recovery codes you saved. Each works once." : "Enter the 6-digit code from your authenticator app."}
+          </p>
+          <label className="field">
+            <span className="field-label">{useRecovery ? "Recovery code" : "Code"}</span>
+            <input
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              autoComplete="one-time-code"
+              inputMode={useRecovery ? "text" : "numeric"}
+              placeholder={useRecovery ? "XXXX-XXXX-XXXX" : "123456"}
+              maxLength={useRecovery ? 20 : 7}
+              required
+              autoFocus
+            />
+          </label>
+          <button className="btn primary wide" disabled={busy}>{busy ? "Checking…" : "Sign in"}</button>
+        </form>
+        <p className="auth-links">
+          <button type="button" className="link-btn" onClick={() => { setUseRecovery((v) => !v); setCode(""); setError(null); }}>
+            {useRecovery ? "Use the authenticator app instead" : "Lost your phone? Use a recovery code"}
+          </button>
+          <button type="button" className="link-btn" onClick={() => { setMfaToken(null); setCode(""); setError(null); }}>
+            Start again
+          </button>
+        </p>
+      </AuthCard>
+    );
+  }
 
   return (
     <AuthCard title="Sign in">
@@ -17,8 +63,13 @@ export function SignIn() {
         onSubmit={(e) => {
           e.preventDefault();
           run(async () => {
-            await startSession("/v1/auth/login", { email, password });
-            navigate(from, { replace: true });
+            const next = await signIn(email, password);
+            if (next) {
+              setMfaToken(next.mfaToken);
+              setPassword("");
+            } else {
+              navigate(from, { replace: true });
+            }
           });
         }}
       >

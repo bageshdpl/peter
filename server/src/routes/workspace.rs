@@ -11,12 +11,12 @@ use crate::{
 };
 
 pub async fn get(State(state): State<AppState>, auth: Auth) -> AppResult<Json<Value>> {
-    let (id, name, created_at): (String, String, i64) =
-        sqlx::query_as("SELECT id, name, created_at FROM workspaces WHERE id = ?")
+    let (id, name, created_at, require_mfa): (String, String, i64, bool) =
+        sqlx::query_as("SELECT id, name, created_at, require_mfa FROM workspaces WHERE id = ?")
             .bind(&auth.workspace_id)
             .fetch_one(&state.db)
             .await?;
-    Ok(Json(json!({ "id": id, "name": name, "created_at": created_at, "role": auth.role })))
+    Ok(Json(json!({ "id": id, "name": name, "created_at": created_at, "role": auth.role, "require_mfa": require_mfa })))
 }
 
 #[derive(Deserialize)]

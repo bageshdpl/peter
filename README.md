@@ -131,6 +131,33 @@ The AI prompts ask for these formats, and edited documents work the same way.
 Traceability document, marked "built by Peter (no AI)". The matrix also
 exports to Excel (matrix, tests, open items).
 
+## Security
+
+Open **Security** in the sidebar.
+
+- **Two-factor sign-in.** Scan the QR code with an authenticator app (Google
+  Authenticator, Microsoft Authenticator, 1Password and others), then enter a
+  code to turn it on. You get 10 one-time recovery codes for a lost phone;
+  they are shown once, so save them. Each code works once, and a code from
+  30 seconds either side of now is accepted to allow for clock drift.
+- **Require it for a workspace.** Admins can require two-factor sign-in for
+  everyone. Members without it can sign in but do nothing except set it up.
+  An admin must have it on before requiring it, so nobody locks themselves
+  out.
+- **Sign-in limits.** After 5 wrong passwords (or codes) for one email, sign-in
+  is refused for 15 minutes, even with the right password. Unknown emails are
+  limited the same way, so a lock does not reveal whether an account exists.
+  Signing a document, changing a password and turning off two-factor sign-in
+  have the same limit. Resetting the password by email ends a lock.
+- **Where you're signed in.** Lists every browser and the extension signed in
+  to your account, when each was last active, and lets you sign out any of
+  them or all others.
+
+Everything here is recorded in the audit trail.
+
+Not yet: limits per network address, and encrypting the authenticator secrets
+in the database (they are stored as plain text, so protect the database file).
+
 ## Run the web app locally
 
 Needs Node.js 22 or later. With the API running in another terminal:
@@ -278,6 +305,26 @@ and `open_comments`.
 | `POST /v1/sessions/{id}/trace/write` | member+ | save the matrix as a new version of the Traceability document |
 | `GET /v1/sessions/{id}/trace/export` | member | Excel workbook: Traceability, Tests, Open items |
 
+## API (security)
+
+| Method and path | Who | What |
+| --- | --- | --- |
+| `POST /v1/auth/login` | anyone | with two-factor on, answers `{ "mfa_required": true, "mfa_token" }` instead of a session |
+| `POST /v1/auth/login/mfa` | anyone | `mfa_token` plus `code` or `recovery_code`; returns the session |
+| `GET /v1/auth/mfa` | signed in | whether two-factor is on, recovery codes left, whether the workspace requires it |
+| `POST /v1/auth/mfa/setup` | signed in | a new secret and `otpauth_url` (not active until enabled) |
+| `POST /v1/auth/mfa/enable` | signed in | `code`; turns it on and returns 10 recovery codes |
+| `POST /v1/auth/mfa/disable` | signed in | `password` and `code` |
+| `POST /v1/auth/mfa/recovery-codes` | signed in | `code`; replaces the recovery codes |
+| `GET /v1/auth/sessions` | signed in | your active sessions |
+| `DELETE /v1/auth/sessions/{id}` | signed in | sign out one of them |
+| `POST /v1/auth/sessions/revoke-others` | signed in | sign out all but this one |
+| `PUT /v1/workspace/security` | admin | `require_mfa` |
+
+Wrong passwords or codes beyond the limit answer `429` with code `locked`.
+When a workspace requires two-factor sign-in and you have not set it up,
+other calls answer `403` with code `mfa_setup_required`.
+
 ### Roles
 
 `owner` > `admin` > `member` > `viewer`. Only an owner can make or change an
@@ -292,4 +339,4 @@ their sessions in that workspace at once.
   which emails have accounts. Password reset always answers 204 for the same
   reason.
 - The audit trail is append-only: database triggers reject updates and deletes.
-- Not yet: rate limiting on sign-in, two-factor sign-in, SSO (see SCOPE.md).
+- Sign-in limits and two-factor sign-in: see the Security section. Not yet: SSO (see SCOPE.md).

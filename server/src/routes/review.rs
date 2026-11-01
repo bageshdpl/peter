@@ -229,9 +229,13 @@ pub async fn sign(
         .fetch_one(&state.db)
         .await?;
     // Not 401: the person is signed in; only this confirmation failed.
+    let key = crate::throttle::user_key(&auth.user_id);
+    crate::throttle::check(&state.db, &key).await?;
     if !verify_password(body.password, hash).await? {
-        return Err(AppError::bad_request("wrong_password", "That password is not right. The version was not signed."));
+        let wrong = AppError::bad_request("wrong_password", "That password is not right. The version was not signed.");
+        return Err(crate::throttle::fail(&state.db, &key).await?.unwrap_or(wrong));
     }
+    crate::throttle::clear(&state.db, &key).await?;
     let mut tx = state.db.begin().await?;
     let id = new_id();
     let t = now();

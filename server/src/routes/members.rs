@@ -252,7 +252,11 @@ pub struct AcceptBody {
     name: Option<String>,
 }
 
-pub async fn accept_invite(State(state): State<AppState>, Body(body): Body<AcceptBody>) -> AppResult<Json<SessionView>> {
+pub async fn accept_invite(
+    State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
+    Body(body): Body<AcceptBody>,
+) -> AppResult<Json<SessionView>> {
     let row: Option<(String, String, String, String)> = sqlx::query_as(
         "SELECT id, workspace_id, email, role FROM invites
          WHERE token_hash = ? AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > ?",
@@ -271,9 +275,13 @@ pub async fn accept_invite(State(state): State<AppState>, Body(body): Body<Accep
     // Work that can fail or is slow happens before the transaction opens.
     let new_user = match &existing {
         Some((_, stored)) => {
+            let key = crate::throttle::email_key(&email);
+            crate::throttle::check(&state.db, &key).await?;
             if !verify_password(body.password.clone(), stored.clone()).await? {
-                return Err(AppError::unauthorized("You already have an account. Enter its password to accept."));
+                let wrong = AppError::unauthorized("You already have an account. Enter its password to accept.");
+                return Err(crate::throttle::fail(&state.db, &key).await?.unwrap_or(wrong));
             }
+            crate::throttle::clear(&state.db, &key).await?;
             None
         }
         None => {
@@ -322,7 +330,7 @@ pub async fn accept_invite(State(state): State<AppState>, Body(body): Body<Accep
     .await?;
     audit(&mut tx, Some(&workspace_id), Some(&user_id), "member.joined", Some(&user_id),
         json!({ "invite_id": invite_id, "role": role })).await?;
-    let tokens = start_session(&mut tx, &state, &user_id, &workspace_id).await?;
+    let tokens = start_session(&mut tx, &state, &user_id, &workspace_id, &crate::auth::user_agent(&headers)).await?;
     let view = session_view(&mut tx, tokens, &user_id, &workspace_id).await?;
     tx.commit().await?;
     Ok(Json(view))

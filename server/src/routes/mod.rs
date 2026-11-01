@@ -6,6 +6,7 @@ mod members;
 mod observations;
 mod projects;
 mod review;
+mod security;
 mod sessions;
 mod sources;
 mod trace;
@@ -90,6 +91,16 @@ pub fn router(max_upload_bytes: usize) -> Router<AppState> {
         .route("/sessions/{id}/trace", get(trace::get))
         .route("/sessions/{id}/trace/write", post(trace::write))
         .route("/sessions/{id}/trace/export", get(trace::export_xlsx))
+        .route("/auth/login/mfa", post(auth::login_mfa))
+        .route("/auth/mfa", get(security::status))
+        .route("/auth/mfa/setup", post(security::setup))
+        .route("/auth/mfa/enable", post(security::enable))
+        .route("/auth/mfa/disable", post(security::disable))
+        .route("/auth/mfa/recovery-codes", post(security::regenerate_codes))
+        .route("/auth/sessions", get(security::list_sessions))
+        .route("/auth/sessions/revoke-others", post(security::revoke_other_sessions))
+        .route("/auth/sessions/{session_id}", delete(security::revoke_session))
+        .route("/workspace/security", axum::routing::put(security::set_policy))
 }
 
 /// JSON body extractor whose errors use the API's error shape.
@@ -119,6 +130,20 @@ pub struct SessionView {
     pub user: UserView,
     pub workspace: WorkspaceView,
     pub workspaces: Vec<WorkspaceView>,
+    /// The workspace requires two-factor sign-in and this person has not set it up.
+    pub mfa_setup_required: bool,
+}
+
+pub async fn mfa_setup_required(conn: &mut SqliteConnection, user_id: &str, workspace_id: &str) -> AppResult<bool> {
+    let (required, has): (bool, bool) = sqlx::query_as(
+        "SELECT w.require_mfa, EXISTS (SELECT 1 FROM user_mfa WHERE user_id = ? AND enabled_at IS NOT NULL)
+         FROM workspaces w WHERE w.id = ?",
+    )
+    .bind(user_id)
+    .bind(workspace_id)
+    .fetch_one(&mut *conn)
+    .await?;
+    Ok(required && !has)
 }
 
 pub async fn user_workspaces(conn: &mut SqliteConnection, user_id: &str) -> AppResult<Vec<WorkspaceView>> {
@@ -147,7 +172,8 @@ pub async fn session_view(
         .find(|w| w.id == workspace_id)
         .map(|w| WorkspaceView { id: w.id.clone(), name: w.name.clone(), role: w.role.clone() })
         .ok_or_else(|| AppError::forbidden("You are not a member of this workspace."))?;
-    Ok(SessionView { tokens, user, workspace, workspaces })
+    let mfa_setup_required = mfa_setup_required(conn, user_id, workspace_id).await?;
+    Ok(SessionView { tokens, user, workspace, workspaces, mfa_setup_required })
 }
 
 pub fn clean_name(value: &str, field: &'static str) -> AppResult<String> {

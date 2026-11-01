@@ -24,6 +24,25 @@ const ACTIONS: Record<string, string> = {
   "session.restored": "Restored a session",
   "source.uploaded": "Added a file",
   "source.removed": "Removed a file",
+  "user.mfa_enabled": "Turned on two-factor sign-in",
+  "user.mfa_disabled": "Turned off two-factor sign-in",
+  "user.recovery_codes_renewed": "Made new recovery codes",
+  "auth.session_revoked": "Signed out a device",
+  "auth.other_sessions_revoked": "Signed out all other devices",
+  "workspace.mfa_policy_changed": "Changed the two-factor requirement",
+  "document.drafted": "Drafted a document",
+  "document.draft_failed": "A draft failed",
+  "document.edited": "Edited a document",
+  "document.generated": "Built the traceability matrix",
+  "document.signed": "Signed a document",
+  "document.exported": "Exported",
+  "comment.added": "Commented",
+  "comment.replied": "Replied to a comment",
+  "comment.resolved": "Resolved a comment",
+  "comment.reopened": "Reopened a comment",
+  "step.status_changed": "Changed a step's status",
+  "observation.removed": "Removed an observed step",
+  "extension.connected": "Connected the extension",
 };
 
 /** "name: Old → New; vendor: … " for update events. */
@@ -51,6 +70,14 @@ function describe(e: AuditEvent): string {
       return String(d.name ?? "");
     case "member.joined":
       return `as ${String(d.role)}`;
+    case "auth.login":
+      return d.mfa ? (d.method === "recovery_code" ? "with a recovery code" : "with two-factor") : "";
+    case "workspace.mfa_policy_changed":
+      return d.require_mfa ? "required" : "optional";
+    case "document.signed":
+      return `${String(d.meaning)}, version ${String(d.version)}`;
+    case "document.exported":
+      return String(d.format ?? "").toUpperCase();
     case "project.created":
       return String(d.name ?? "");
     case "session.created":

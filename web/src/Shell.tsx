@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { Navigate, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { atLeast, logout, reloadSession, startSession } from "./api";
 import { useSession } from "./App";
 
@@ -56,6 +56,7 @@ export default function Shell() {
           <NavLink to="/members">Members</NavLink>
           {isAdmin && <NavLink to="/audit">Audit trail</NavLink>}
           <NavLink to="/settings">Settings</NavLink>
+          <NavLink to="/security">Security</NavLink>
         </nav>
 
         <div className="sidebar-foot">
@@ -70,7 +71,8 @@ export default function Shell() {
         </div>
       </aside>
       <main className="main">
-        <Outlet />
+        {/* A workspace that requires two-factor sign-in allows nothing else until it is set up. */}
+        {session.mfa_setup_required && location.pathname !== "/security" ? <Navigate to="/security" replace /> : <Outlet />}
       </main>
     </div>
   );

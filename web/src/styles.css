@@ -429,3 +429,22 @@ textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 .trace-empty { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; background: var(--surface-2); border-radius: 8px; padding: 0.75rem; }
 .trace-empty p { margin: 0; }
 @media (prefers-color-scheme: dark) { .status-pill.not_tested { background: #4e2f0b; color: #fedf89; } .stat.warn .n { color: #fdb022; } }
+
+/* Security */
+.block { display: block; }
+.row-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem; }
+.btn.danger-solid { background: var(--danger); color: #fff; }
+.recovery { background: #fef0c7; color: #4e2f0b; border-radius: 8px; padding: 0.9rem 1rem; margin-bottom: 0.75rem; }
+.recovery h3 { margin: 0 0 0.35rem; font-size: 1rem; }
+.recovery p { margin: 0 0 0.5rem; }
+.codes { columns: 2; margin: 0.5rem 0; padding-left: 1.5rem; font-size: 1rem; }
+.codes code { font-size: 0.95rem; letter-spacing: 0.05em; background: #fff8e6; padding: 0.1rem 0.35rem; border-radius: 4px; }
+.mfa-setup .setup-steps { margin: 0; padding-left: 1.2rem; display: flex; flex-direction: column; gap: 1rem; }
+.mfa-setup .setup-steps li { display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-start; }
+.mfa-setup img { border: 1px solid var(--border); border-radius: 8px; background: #fff; }
+.mfa-setup input { max-width: 180px; font-size: 1.2rem; letter-spacing: 0.15em; }
+.secret { display: inline-block; margin-top: 0.35rem; font-size: 0.95rem; letter-spacing: 0.05em; background: var(--surface-2); padding: 0.3rem 0.5rem; border-radius: 6px; }
+.check-row { display: flex; gap: 0.75rem; align-items: flex-start; cursor: pointer; }
+.check-row input { margin-top: 0.25rem; width: 18px; height: 18px; min-height: 0; }
+@media (prefers-color-scheme: dark) { .recovery { background: #4e2f0b; color: #fedf89; } .codes code { background: #2b1a06; } }
+@media (max-width: 760px) { .codes { columns: 1; } }

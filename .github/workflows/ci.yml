@@ -69,3 +69,60 @@ jobs:
         run: |
           for f in *.js; do node --check "$f"; done
           node -e "JSON.parse(require('fs').readFileSync('manifest.json', 'utf8'))"
+
+  hosting:
+    name: Hosting image (backup and restore)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the image
+        run: docker build -t peter:ci .
+      - name: Start a test S3 server
+        run: |
+          pip install --quiet "moto[server]"
+          moto_server -H 127.0.0.1 -p 9000 > moto.log 2>&1 &
+          for i in $(seq 1 20); do curl -s http://127.0.0.1:9000 >/dev/null && break; sleep 1; done
+          AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test aws --endpoint-url http://127.0.0.1:9000 --region us-east-1 s3 mb s3://peter-backup
+      - name: Start Peter, create data, then wipe the container
+        run: |
+          set -e
+          run() {
+            docker run -d --name "$1" --network host \
+              -e PORT=8080 -e PETER_APP_URL=https://peter-ci.example.com -e PETER_ADMIN_EMAIL=admin@example.com \
+              -e BACKUP_S3_BUCKET=peter-backup -e BACKUP_S3_ENDPOINT=http://127.0.0.1:9000 -e BACKUP_S3_REGION=us-east-1 \
+              -e BACKUP_S3_ACCESS_KEY_ID=test -e BACKUP_S3_SECRET_ACCESS_KEY=test peter:ci
+            for i in $(seq 1 30); do curl -sf http://127.0.0.1:8080/healthz >/dev/null && return 0; sleep 1; done
+            docker logs "$1"; exit 1
+          }
+          run first
+          curl -sf http://127.0.0.1:8080/v1/meta | grep -q '"signup":"first_admin"'
+          # A stranger cannot take the first account; the configured admin can.
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:8080/v1/auth/signup -H 'content-type: application/json' \
+            -d '{"email":"stranger@example.com","password":"stranger-pass-1","name":"S","workspace_name":"S"}')
+          test "$code" = 403
+          token=$(curl -sf -X POST http://127.0.0.1:8080/v1/auth/signup -H 'content-type: application/json' \
+            -d '{"email":"admin@example.com","password":"admin-pass-123","name":"Admin","workspace_name":"Acme"}' | python3 -c 'import json,sys; print(json.load(sys.stdin)["access_token"])')
+          curl -sf -X POST http://127.0.0.1:8080/v1/projects -H "authorization: Bearer $token" -H 'content-type: application/json' \
+            -d '{"name":"Survives restarts"}' >/dev/null
+          curl -sf http://127.0.0.1:8080/v1/meta | grep -q '"signup":"invite_only"'
+          # The extension download is set up for this server's address.
+          curl -sf -o ext.zip http://127.0.0.1:8080/v1/extension/download
+          unzip -p ext.zip peter-observer/config.js | grep -q 'https://peter-ci.example.com'
+          unzip -p ext.zip peter-observer/manifest.json | grep -q 'https://peter-ci.example.com/\*'
+          # The app pages are served.
+          curl -sf http://127.0.0.1:8080/projects/anything | grep -q '<div id="root">'
+          sleep 5
+          docker stop first && docker rm first
+          echo "Container wiped. Starting a fresh one."
+          run second
+          token=$(curl -sf -X POST http://127.0.0.1:8080/v1/auth/login -H 'content-type: application/json' \
+            -d '{"email":"admin@example.com","password":"admin-pass-123"}' | python3 -c 'import json,sys; print(json.load(sys.stdin)["access_token"])')
+          curl -sf http://127.0.0.1:8080/v1/projects -H "authorization: Bearer $token" | grep -q 'Survives restarts'
+          echo "Data restored from the backup after a full wipe."
+          docker logs second 2>&1 | grep -q 'restoring the database'
+      - name: Logs
+        if: failure()
+        run: |
+          docker logs first 2>&1 | tail -50 || true
+          docker logs second 2>&1 | tail -50 || true
+          tail -30 moto.log || true

@@ -41,10 +41,15 @@ pub async fn signup(
     headers: HeaderMap,
     Body(body): Body<SignupBody>,
 ) -> AppResult<(StatusCode, Json<SessionView>)> {
-    if !state.config.allow_signup {
-        return Err(AppError::forbidden("Sign-up is turned off. Ask an administrator for an invite."));
-    }
     let email = normalize_email(&body.email)?;
+    if !state.config.allow_signup {
+        // Invite-only: the configured admin may create the first account, nobody else.
+        let (users,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users").fetch_one(&state.db).await?;
+        let bootstrap = users == 0 && state.config.admin_email.as_deref() == Some(email.as_str());
+        if !bootstrap {
+            return Err(AppError::forbidden("This Peter is invite-only. Ask an administrator for an invite."));
+        }
+    }
     let name = clean_name(&body.name, "name")?;
     let workspace_name = clean_name(&body.workspace_name, "workspace name")?;
     check_new_password(&body.password)?;

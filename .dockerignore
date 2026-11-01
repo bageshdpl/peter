@@ -1,0 +1,7 @@
+**/node_modules
+**/dist
+server/target
+**/*.db
+**/*.db-*
+**/peter-data
+.git

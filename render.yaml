@@ -1,0 +1,25 @@
+# Render Blueprint: Dashboard → New → Blueprint → choose this repository.
+# Render asks for each value marked "sync: false". See docs/DEPLOY.md.
+services:
+  - type: web
+    name: peter
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: PETER_ADMIN_EMAIL
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: BACKUP_S3_BUCKET
+        sync: false
+      - key: BACKUP_S3_ENDPOINT
+        sync: false
+      - key: BACKUP_S3_REGION
+        sync: false
+      - key: BACKUP_S3_ACCESS_KEY_ID
+        sync: false
+      - key: BACKUP_S3_SECRET_ACCESS_KEY
+        sync: false

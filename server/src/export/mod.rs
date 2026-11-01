@@ -106,7 +106,7 @@ async fn branding(state: &AppState, workspace_id: &str, session_id: &str, step_i
     .await?;
     let Some((company_name, prefix, footer_text, logo_type)) = row else { return Ok(BrandingOut::default()) };
     let logo = match logo_type {
-        Some(kind) => tokio::fs::read(state.config.data_dir.join("logos").join(workspace_id)).await.ok().map(|b| (kind, b)),
+        Some(kind) => crate::storage::get(state, "logos", workspace_id).await?.map(|b| (kind, b)),
         None => None,
     };
     let session: String = session_id.chars().filter(|c| c.is_ascii_hexdigit()).take(8).collect::<String>().to_uppercase();
@@ -312,7 +312,7 @@ pub async fn load(
                 _ => format!("Screenshot of {place}"),
             };
             let screenshot = match (&o.screenshot_type, with_screenshots) {
-                (Some(t), true) => tokio::fs::read(state.config.data_dir.join("screenshots").join(&o.id)).await.ok().map(|b| (t.clone(), b)),
+                (Some(t), true) => crate::storage::get(state, "screenshots", &o.id).await?.map(|b| (t.clone(), b)),
                 _ => None,
             };
             observations.push(CitedObservation {

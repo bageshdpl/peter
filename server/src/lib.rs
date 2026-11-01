@@ -12,6 +12,7 @@ pub mod prompts;
 pub mod routes;
 pub mod security;
 pub mod standards;
+pub mod storage;
 pub mod state;
 pub mod throttle;
 pub mod trace;

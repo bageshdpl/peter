@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, fetchBlobUrl, type Observation } from "./api";
+import { api, fetchBlobUrl, serverMeta, type Observation } from "./api";
 import type { SessionEvents } from "./events";
 import { messageOf, Notice } from "./ui";
 
@@ -110,6 +110,10 @@ export function ObservationPanel(props: {
   const { sessionId, sessionTitle, userId, workspaceId, canRecord, events } = props;
   const { live, subscribe } = events;
   const ext = useExtension();
+  const [canDownload, setCanDownload] = useState(false);
+  useEffect(() => {
+    serverMeta().then((m) => setCanDownload(m.extension_download));
+  }, []);
   const [steps, setSteps] = useState<Observation[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -193,10 +197,19 @@ export function ObservationPanel(props: {
           {!ext.checked ? (
             <span className="muted">Looking for the extension…</span>
           ) : !ext.installed ? (
-            <span className="muted">
-              The Peter Observer extension is not installed in this browser. See <code>extension/README.md</code> to
-              add it.
-            </span>
+            canDownload ? (
+              <span>
+                The Peter Observer extension is not installed in this browser.{" "}
+                <a href="/v1/extension/download" download>Download it</a>, unzip it, then in Chrome open{" "}
+                <code>chrome://extensions</code>, turn on <b>Developer mode</b>, click <b>Load unpacked</b> and choose the
+                unzipped <code>peter-observer</code> folder. Then reload this page.
+              </span>
+            ) : (
+              <span className="muted">
+                The Peter Observer extension is not installed in this browser. Load the <code>extension</code> folder from
+                your Peter download at <code>chrome://extensions</code> (Developer mode, Load unpacked).
+              </span>
+            )
           ) : targetsThis ? (
             <span>
               <strong>Extension ready.</strong>{" "}

@@ -1,9 +1,18 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { api, clearHash, readHashToken, signIn, startSession } from "../api";
+import { api, clearHash, readHashToken, serverMeta, signIn, startSession, type ServerMeta } from "../api";
+
+function useMeta() {
+  const [meta, setMeta] = useState<ServerMeta | null>(null);
+  useEffect(() => {
+    serverMeta().then(setMeta);
+  }, []);
+  return meta;
+}
 import { AuthCard, Field, Notice, PASSWORD_HINT, useAction } from "../ui";
 
 export function SignIn() {
+  const meta = useMeta();
   const navigate = useNavigate();
   const location = useLocation();
   const from = (location.state as { from?: string } | null)?.from ?? "/";
@@ -80,13 +89,20 @@ export function SignIn() {
       </form>
       <p className="auth-links">
         <Link to="/forgot">Forgot your password?</Link>
-        <span>New to Peter? <Link to="/signup">Create an account</Link></span>
+        {meta?.signup === "invite_only" ? (
+          <span>New here? This Peter is invite-only: ask an administrator for an invite.</span>
+        ) : meta?.signup === "first_admin" ? (
+          <span>Setting up? <Link to="/signup">Create the administrator account</Link></span>
+        ) : (
+          <span>New to Peter? <Link to="/signup">Create an account</Link></span>
+        )}
       </p>
     </AuthCard>
   );
 }
 
 export function SignUp() {
+  const meta = useMeta();
   const navigate = useNavigate();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -95,7 +111,13 @@ export function SignUp() {
   const { busy, error, run } = useAction();
 
   return (
-    <AuthCard title="Create your account">
+    <AuthCard title={meta?.signup === "first_admin" ? "Create the administrator account" : "Create your account"}>
+      {meta?.signup === "invite_only" && (
+        <Notice kind="error">This Peter is invite-only. Ask an administrator to invite you; the invite link signs you up.</Notice>
+      )}
+      {meta?.signup === "first_admin" && (
+        <Notice kind="ok">Use the administrator email configured on the server. You can then invite everyone else.</Notice>
+      )}
       <form
         onSubmit={(e) => {
           e.preventDefault();

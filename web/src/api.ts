@@ -298,6 +298,18 @@ export async function followEvents(
   }
 }
 
+export interface ServerMeta { signup: "open" | "invite_only" | "first_admin"; extension_download: boolean; version: string }
+
+let metaCache: Promise<ServerMeta> | null = null;
+/** Public facts about this server (cached for the page's lifetime). */
+export function serverMeta(): Promise<ServerMeta> {
+  metaCache ??= fetch("/v1/meta").then((r) => r.json() as Promise<ServerMeta>).catch(() => {
+    metaCache = null;
+    return { signup: "open", extension_download: false, version: "" } as ServerMeta;
+  });
+  return metaCache;
+}
+
 /** Downloads with the access token (a plain link cannot send it) and saves the file. */
 export async function downloadFile(path: string, filename: string) {
   const res = await authed("GET", path);

@@ -11,6 +11,7 @@ chmod +x ./peter-server 2>/dev/null
 export PETER_BIND="127.0.0.1:5173"
 export PETER_APP_URL="http://localhost:5173"
 export PETER_WEB_DIR="$PWD/web"
+export PETER_EXTENSION_DIR="$PWD/extension"
 
 # Your AI keys, if you made my-keys.sh (see my-keys.example.sh).
 [ -f ./my-keys.sh ] && source ./my-keys.sh

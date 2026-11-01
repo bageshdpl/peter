@@ -183,11 +183,7 @@ pub async fn create(
         Some(data_url) => {
             let (kind, bytes) = decode_screenshot(data_url)?;
             let sha = hex::encode(Sha256::digest(&bytes));
-            let path = state.config.data_dir.join("screenshots").join(&id);
-            tokio::fs::write(&path, &bytes).await.map_err(|e| {
-                tracing::error!(error = %e, "could not store screenshot");
-                AppError::internal()
-            })?;
+            crate::storage::put(&state, "screenshots", &id, &bytes).await?;
             Some((kind, bytes.len() as i64, sha))
         }
         None => None,
@@ -233,7 +229,7 @@ pub async fn create(
     .await;
     if let Err(err) = inserted {
         if screenshot.is_some() {
-            let _ = tokio::fs::remove_file(state.config.data_dir.join("screenshots").join(&id)).await;
+            let _ = crate::storage::delete(&state, "screenshots", &id).await;
         }
         return Err(err);
     }
@@ -259,12 +255,10 @@ pub async fn screenshot(
     .fetch_optional(&state.db)
     .await?;
     let content_type = row.and_then(|(t,)| t).ok_or_else(|| AppError::not_found("No screenshot for this step."))?;
-    let bytes = tokio::fs::read(state.config.data_dir.join("screenshots").join(&observation_id))
-        .await
-        .map_err(|e| {
-            tracing::error!(error = %e, %observation_id, "stored screenshot is missing");
-            AppError::internal()
-        })?;
+    let bytes = crate::storage::get(&state, "screenshots", &observation_id).await?.ok_or_else(|| {
+        tracing::error!(%observation_id, "stored screenshot is missing");
+        AppError::internal()
+    })?;
     Response::builder()
         .header(header::CONTENT_TYPE, content_type)
         .header(header::CACHE_CONTROL, "private, max-age=86400, immutable")

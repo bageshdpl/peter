@@ -14,6 +14,9 @@ from [Releases](https://github.com/bageshdpl/peter/releases/latest): no
 installation and no admin rights needed. Step by step:
 [Windows](docs/SETUP-WINDOWS.md) · [Mac](docs/SETUP-MAC.md).
 
+**Want testers to use it online?** [docs/DEPLOY.md](docs/DEPLOY.md) puts
+Peter on Render with backups to Supabase, free, invite-only.
+
 ### Using Peter from another GitHub account
 
 The repository is private, so another account (for example one linked to a
@@ -233,6 +236,8 @@ window (or a private window) without email.
 | `PETER_ALLOW_SIGNUP` | `true` | `false` makes the API invite-only |
 | `PETER_DATA_DIR` | `peter-data` | folder for uploaded files |
 | `PETER_MAX_UPLOAD_MB` | `25` | largest file accepted |
+| `PETER_ALLOW_SIGNUP` + `PETER_ADMIN_EMAIL` | `true`, none | with sign-up off, only this email may create the first account |
+| `PETER_EXTENSION_DIR` | none | the extension folder; Peter then offers it as a download set up for `PETER_APP_URL` |
 | `PETER_WEB_DIR` | none | folder of the built web app (`web/dist`); the server then serves the app too, so no Node.js is needed |
 
 ## API (M0)

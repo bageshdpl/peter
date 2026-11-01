@@ -4,9 +4,8 @@ use std::io::{Cursor, Read};
 
 /// Text of a file, or a short reason it could not be read. Runs off the async
 /// threads because PDF parsing can be slow.
-pub async fn text_of(path: std::path::PathBuf, content_type: String) -> Result<String, String> {
+pub async fn text_of(bytes: Vec<u8>, content_type: String) -> Result<String, String> {
     tokio::task::spawn_blocking(move || {
-        let bytes = std::fs::read(&path).map_err(|_| "the stored file is missing".to_string())?;
         // A malformed file must not take the server down.
         std::panic::catch_unwind(|| extract(&bytes, &content_type)).unwrap_or_else(|_| Err("the file could not be parsed".into()))
     })

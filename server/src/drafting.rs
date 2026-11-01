@@ -123,8 +123,12 @@ pub async fn gather(state: &AppState, session_id: &str, step_id: &str) -> Result
         .map_err(db_err)?;
         let mut budget = MAX_ALL_SOURCE_CHARS;
         for (i, (id, filename, content_type)) in files.into_iter().enumerate() {
-            let path = state.config.data_dir.join("sources").join(&id);
-            let text = extract::text_of(path, content_type).await.map(|t| {
+            let bytes = crate::storage::get(state, "sources", &id).await.map_err(|_| "Could not read a source file.".to_string())?;
+            let text = match bytes {
+                Some(b) => extract::text_of(b, content_type).await,
+                None => Err("the stored file is missing".to_string()),
+            };
+            let text = text.map(|t| {
                 let t = extract::tidy(&t);
                 let take = MAX_SOURCE_CHARS.min(budget);
                 let cut: String = t.chars().take(take).collect();

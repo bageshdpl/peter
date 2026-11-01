@@ -10,7 +10,6 @@ use axum::{
 use serde::Serialize;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
-use tokio::io::AsyncWriteExt;
 
 use super::projects::project_in_workspace;
 use crate::{
@@ -97,67 +96,52 @@ pub async fn upload(
     let (filename, content_type) = clean_filename(field.file_name().unwrap_or(""))?;
 
     let id = new_id();
-    let path = state.config.data_dir.join("sources").join(&id);
-    let mut file = tokio::fs::File::create(&path).await.map_err(|e| {
-        tracing::error!(error = %e, "could not create upload file");
-        AppError::internal()
-    })?;
+    // Read the whole file (it is at most max_upload_bytes) while hashing it.
     let mut hasher = Sha256::new();
-    let mut size = 0usize;
-    let result: AppResult<()> = async {
-        while let Some(chunk) = field.chunk().await.map_err(|e| bad(&e.body_text()))? {
-            size += chunk.len();
-            if size > state.config.max_upload_bytes {
-                return Err(AppError::new(StatusCode::PAYLOAD_TOO_LARGE, "too_large",
-                    format!("Files can be at most {} MB.", state.config.max_upload_bytes / (1024 * 1024))));
-            }
-            hasher.update(&chunk);
-            file.write_all(&chunk).await.map_err(|_| AppError::internal())?;
+    let mut data: Vec<u8> = Vec::new();
+    while let Some(chunk) = field.chunk().await.map_err(|e| bad(&e.body_text()))? {
+        if data.len() + chunk.len() > state.config.max_upload_bytes {
+            return Err(AppError::new(StatusCode::PAYLOAD_TOO_LARGE, "too_large",
+                format!("Files can be at most {} MB.", state.config.max_upload_bytes / (1024 * 1024))));
         }
-        file.flush().await.map_err(|_| AppError::internal())?;
-        if size == 0 {
-            return Err(bad("The file is empty."));
-        }
-        Ok(())
+        hasher.update(&chunk);
+        data.extend_from_slice(&chunk);
     }
-    .await;
-    if let Err(err) = result {
-        drop(file);
-        let _ = tokio::fs::remove_file(&path).await;
-        return Err(err);
+    if data.is_empty() {
+        return Err(bad("The file is empty."));
     }
+    let size = data.len();
     let sha256 = hex::encode(hasher.finalize());
 
+    // The file and its record are saved together, or not at all.
     let t = now();
-    let saved: AppResult<()> = async {
-        let mut tx = state.db.begin().await?;
-        sqlx::query(
-            "INSERT INTO project_sources
-             (id, workspace_id, project_id, filename, content_type, size_bytes, sha256, uploaded_by, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        )
-        .bind(&id)
-        .bind(&auth.workspace_id)
-        .bind(&project_id)
-        .bind(&filename)
-        .bind(content_type)
-        .bind(size as i64)
-        .bind(&sha256)
-        .bind(&auth.user_id)
+    let mut tx = state.db.begin().await?;
+    sqlx::query("INSERT INTO blobs (key, data, created_at) VALUES (?, ?, ?)")
+        .bind(crate::storage::key("sources", &id))
+        .bind(&data)
         .bind(t)
         .execute(&mut *tx)
         .await?;
-        sqlx::query("UPDATE projects SET updated_at = ? WHERE id = ?").bind(t).bind(&project_id).execute(&mut *tx).await?;
-        audit(&mut tx, Some(&auth.workspace_id), Some(&auth.user_id), "source.uploaded", Some(&id),
-            json!({ "project_id": project_id, "filename": filename, "size_bytes": size, "sha256": sha256 })).await?;
-        tx.commit().await?;
-        Ok(())
-    }
-    .await;
-    if let Err(err) = saved {
-        let _ = tokio::fs::remove_file(&path).await;
-        return Err(err);
-    }
+    sqlx::query(
+        "INSERT INTO project_sources
+         (id, workspace_id, project_id, filename, content_type, size_bytes, sha256, uploaded_by, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    )
+    .bind(&id)
+    .bind(&auth.workspace_id)
+    .bind(&project_id)
+    .bind(&filename)
+    .bind(content_type)
+    .bind(size as i64)
+    .bind(&sha256)
+    .bind(&auth.user_id)
+    .bind(t)
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query("UPDATE projects SET updated_at = ? WHERE id = ?").bind(t).bind(&project_id).execute(&mut *tx).await?;
+    audit(&mut tx, Some(&auth.workspace_id), Some(&auth.user_id), "source.uploaded", Some(&id),
+        json!({ "project_id": project_id, "filename": filename, "size_bytes": size, "sha256": sha256 })).await?;
+    tx.commit().await?;
 
     let source = json!({
         "id": id, "filename": filename, "content_type": content_type, "size_bytes": size, "sha256": sha256, "created_at": t,
@@ -184,8 +168,8 @@ pub async fn download(
     Path((project_id, source_id)): Path<(String, String)>,
 ) -> AppResult<Response> {
     let (filename, content_type) = find_source(&state, &auth, &project_id, &source_id).await?;
-    let bytes = tokio::fs::read(state.config.data_dir.join("sources").join(&source_id)).await.map_err(|e| {
-        tracing::error!(error = %e, %source_id, "stored file is missing");
+    let bytes = crate::storage::get(&state, "sources", &source_id).await?.ok_or_else(|| {
+        tracing::error!(%source_id, "stored file is missing");
         AppError::internal()
     })?;
     let ascii: String = filename.chars().map(|c| if c.is_ascii_alphanumeric() || ".-_ ".contains(c) { c } else { '_' }).collect();

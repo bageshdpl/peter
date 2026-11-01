@@ -154,11 +154,7 @@ pub async fn upload_template(State(state): State<AppState>, auth: Auth, multipar
     };
     let name = clean_text(fields.get("name").map(String::as_str).unwrap_or(&filename), "template name", 120, true)?;
 
-    // Extract the text from a temporary copy, the same way source files are read.
-    let tmp = state.config.data_dir.join(format!("template-upload-{}", new_id()));
-    tokio::fs::write(&tmp, &bytes).await.map_err(|_| AppError::internal())?;
-    let text = extract::text_of(tmp.clone(), content_type.to_string()).await;
-    let _ = tokio::fs::remove_file(&tmp).await;
+    let text = extract::text_of(bytes.clone(), content_type.to_string()).await;
     let text = extract::tidy(&text.map_err(|reason| AppError::bad_request("unreadable", format!("Peter could not read the template: {reason}.")))?);
     if text.chars().count() < 20 {
         return Err(AppError::bad_request("unreadable", "The template has almost no text Peter can read."));
@@ -269,10 +265,6 @@ pub async fn set_branding(State(state): State<AppState>, auth: Auth, Body(body):
     Ok(Json(branding_of(&state.db, &auth.workspace_id).await?))
 }
 
-fn logo_path(state: &AppState, workspace_id: &str) -> std::path::PathBuf {
-    state.config.data_dir.join("logos").join(workspace_id)
-}
-
 pub async fn upload_logo(State(state): State<AppState>, auth: Auth, multipart: Multipart) -> AppResult<Json<Branding>> {
     auth.require(Role::Admin)?;
     let (_, bytes, _) = read_upload(multipart, MAX_LOGO_BYTES).await?;
@@ -286,8 +278,7 @@ pub async fn upload_logo(State(state): State<AppState>, auth: Auth, multipart: M
     if crate::export::image_size(&bytes).is_none() {
         return Err(AppError::bad_request("file_type", "Peter could not read that image's size."));
     }
-    tokio::fs::create_dir_all(state.config.data_dir.join("logos")).await.map_err(|_| AppError::internal())?;
-    tokio::fs::write(logo_path(&state, &auth.workspace_id), &bytes).await.map_err(|_| AppError::internal())?;
+    crate::storage::put(&state, "logos", &auth.workspace_id, &bytes).await?;
     let sha = hex::encode(Sha256::digest(&bytes));
     let mut tx = state.db.begin().await?;
     sqlx::query(
@@ -317,14 +308,14 @@ pub async fn remove_logo(State(state): State<AppState>, auth: Auth) -> AppResult
         .await?;
     audit(&mut tx, Some(&auth.workspace_id), Some(&auth.user_id), "library.logo_changed", None, json!({ "removed": true })).await?;
     tx.commit().await?;
-    let _ = tokio::fs::remove_file(logo_path(&state, &auth.workspace_id)).await;
+    crate::storage::delete(&state, "logos", &auth.workspace_id).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
 /// The logo's type and bytes, if the workspace has one.
 pub async fn logo_of(state: &AppState, workspace_id: &str) -> AppResult<Option<(String, Vec<u8>)>> {
     let Some(kind) = branding_of(&state.db, workspace_id).await?.logo_type else { return Ok(None) };
-    Ok(tokio::fs::read(logo_path(state, workspace_id)).await.ok().map(|b| (kind, b)))
+    Ok(crate::storage::get(state, "logos", workspace_id).await?.map(|b| (kind, b)))
 }
 
 pub async fn get_logo(State(state): State<AppState>, auth: Auth) -> AppResult<Response> {

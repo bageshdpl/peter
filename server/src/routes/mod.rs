@@ -4,6 +4,7 @@ mod documents;
 mod extension;
 mod library;
 mod members;
+mod meta;
 mod observations;
 mod projects;
 mod review;
@@ -109,6 +110,8 @@ pub fn router(max_upload_bytes: usize) -> Router<AppState> {
         )
         .route("/library/templates/{template_id}", get(library::get_template).delete(library::remove_template))
         .route("/workspace/branding", get(library::get_branding).put(library::set_branding))
+        .route("/meta", get(meta::meta))
+        .route("/extension/download", get(meta::extension_zip))
         .fallback(|| async { AppError::not_found("No such API endpoint.") })
         .route(
             "/workspace/branding/logo",

@@ -18,6 +18,7 @@ const MAX_OBSERVATIONS: usize = 400;
 const MAX_SOURCE_CHARS: usize = 12_000;
 const MAX_ALL_SOURCE_CHARS: usize = 48_000;
 const MAX_DOCUMENT_CHARS: usize = 8_000;
+const MAX_TEMPLATE_CHARS: usize = 10_000;
 
 #[derive(Debug, Clone, Serialize, serde::Deserialize)]
 pub struct SourceRef {
@@ -33,6 +34,10 @@ pub struct Evidence {
     pub observations: Vec<ObservationLine>,
     pub sources: Vec<(String, SourceRef, Result<String, String>)>, // ("S1", ref, text)
     pub documents: Vec<(String, String, String)>,                  // (step_id, title, body)
+    /// Regulations the workspace selected in the Library.
+    pub standards: Vec<String>,
+    /// The company's template for this step, if one is in the Library: (name, text).
+    pub template: Option<(String, String)>,
 }
 
 pub struct ObservationLine {
@@ -74,8 +79,8 @@ fn describe(o: &ObsRow) -> String {
 
 pub async fn gather(state: &AppState, session_id: &str, step_id: &str) -> Result<Evidence, String> {
     let db_err = |e: sqlx::Error| format!("Could not read the session: {e}");
-    let (title, validation_type, project_id): (String, String, Option<String>) =
-        sqlx::query_as("SELECT title, validation_type, project_id FROM validation_sessions WHERE id = ?")
+    let (title, validation_type, project_id, workspace_id): (String, String, Option<String>, String) =
+        sqlx::query_as("SELECT title, validation_type, project_id, workspace_id FROM validation_sessions WHERE id = ?")
             .bind(session_id)
             .fetch_one(&state.db)
             .await
@@ -152,7 +157,27 @@ pub async fn gather(state: &AppState, session_id: &str, step_id: &str) -> Result
         .collect();
     documents.sort_by_key(|(step, _, _)| kind.steps.iter().position(|s| s.id == step));
 
-    Ok(Evidence { project, session_title: title, type_title: kind.title.to_string(), observations, sources, documents })
+    let mut standards: Vec<String> = sqlx::query_as::<_, (String,)>("SELECT standard_id FROM workspace_standards WHERE workspace_id = ?")
+        .bind(&workspace_id)
+        .fetch_all(&state.db)
+        .await
+        .map_err(db_err)?
+        .into_iter()
+        .map(|(id,)| id)
+        .collect();
+    // In catalog order (Part 11 first), not alphabetical.
+    standards.sort_by_key(|id| crate::standards::CATALOG.iter().position(|s| s.id == id));
+    let template: Option<(String, String)> = sqlx::query_as(
+        "SELECT name, text FROM library_templates WHERE workspace_id = ? AND step_id = ? AND archived_at IS NULL
+         ORDER BY created_at DESC LIMIT 1",
+    )
+    .bind(&workspace_id)
+    .bind(step_id)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(db_err)?;
+
+    Ok(Evidence { project, session_title: title, type_title: kind.title.to_string(), observations, sources, documents, standards, template })
 }
 
 pub fn user_prompt(evidence: &Evidence, spec: &prompts::DocumentSpec, extra: &str) -> String {
@@ -161,6 +186,15 @@ pub fn user_prompt(evidence: &Evidence, spec: &prompts::DocumentSpec, extra: &st
     if !extra.trim().is_empty() {
         p.push_str(&format!("\nAdditional instructions from the validation lead:\n{}\n", extra.trim()));
     }
+    if let Some((name, text)) = &evidence.template {
+        let text: String = text.chars().take(MAX_TEMPLATE_CHARS).collect();
+        p.push_str(&format!(
+            "\n# Company template\nThe company writes this document using its template \"{name}\". Follow its section \
+headings, their order and its table columns, and keep its wording for fixed text such as purpose statements. \
+Placeholders in the template are not evidence. Template text:\n\n{text}\n"
+        ));
+    }
+    p.push_str(&crate::standards::prompt_section(&evidence.standards));
     p.push_str("\n# System under validation\n");
     p.push_str(&format!("Session: {}\n", evidence.session_title));
     match &evidence.project {
@@ -284,6 +318,13 @@ Choose an AI provider to draft the real text.\n\n## Evidence available\n\n",
         for (step, title, _) in &evidence.documents {
             d.push_str(&format!("- {title} [D:{step}]\n"));
         }
+    }
+    if let Some((name, _)) = &evidence.template {
+        d.push_str(&format!("\n## Company template\n\nDrafts follow the company template \"{name}\" from the Library.\n"));
+    }
+    if !evidence.standards.is_empty() {
+        let names: Vec<&str> = evidence.standards.iter().filter_map(|id| crate::standards::find(id).map(|s| s.name)).collect();
+        d.push_str(&format!("\n## Regulations in scope\n\n{}\n", names.join(", ")));
     }
     d.push_str(&format!("\n## What this document must cover\n\n{}\n\n[GAP: draft with an AI provider]\n", spec.instructions));
     d

@@ -448,3 +448,19 @@ textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 .check-row input { margin-top: 0.25rem; width: 18px; height: 18px; min-height: 0; }
 @media (prefers-color-scheme: dark) { .recovery { background: #4e2f0b; color: #fedf89; } .codes code { background: #2b1a06; } }
 @media (max-width: 760px) { .codes { columns: 1; } }
+
+/* Library */
+.reg-list { display: flex; flex-direction: column; gap: 0.6rem; margin-top: 0.75rem; }
+.reg { border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem 0.9rem; }
+.reg.on { border-color: var(--accent); background: var(--accent-soft); }
+.reg-head { display: flex; justify-content: space-between; gap: 1rem; align-items: flex-start; }
+.clauses { margin: 0.75rem 0 0 2rem; display: flex; flex-direction: column; gap: 0.45rem; }
+.clauses dt { font-weight: 600; font-size: 0.9rem; }
+.clauses dd { margin: 0.1rem 0 0; font-size: 0.88rem; }
+.template-preview { width: min(900px, 100%); }
+.template-preview pre { white-space: pre-wrap; max-height: 70vh; overflow: auto; background: var(--surface-2); padding: 0.75rem; border-radius: 6px; font-size: 0.85rem; margin: 0; }
+.wide-stack { max-width: 560px; }
+.logo-row { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; border-top: 1px solid var(--border); margin-top: 1rem; padding-top: 1rem; }
+.logo-box { width: 200px; height: 72px; border: 1px dashed var(--border); border-radius: 8px; display: grid; place-items: center; background: #fff; overflow: hidden; }
+.logo-box img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.reg-head .link-btn { white-space: nowrap; }

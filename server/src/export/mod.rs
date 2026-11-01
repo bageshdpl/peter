@@ -67,6 +67,51 @@ pub struct ExportDoc {
     pub unknown: Vec<String>,
     pub exported_by: String,
     pub exported_at: i64,
+    pub branding: BrandingOut,
+}
+
+/// How the company appears on exports (from the Library's Branding).
+#[derive(Default)]
+pub struct BrandingOut {
+    pub company_name: String,
+    pub footer_text: String,
+    /// Prefix, session and step, for example "ACME-CSV-7F3A9C21-URS". Empty without a prefix.
+    pub doc_number: String,
+    pub logo: Option<(String, Vec<u8>)>,
+}
+
+/// A short code for each step's document, used in document numbers.
+fn step_code(step_id: &str) -> String {
+    match step_id {
+        "observe" => "OBS".into(),
+        "assessment" => "SA".into(),
+        "requirements" => "URS".into(),
+        "specification" => "FDS".into(),
+        "configuration" => "CS".into(),
+        "plan" => "VP".into(),
+        "installation" => "IQ".into(),
+        "testing" => "TS".into(),
+        "traceability" => "TM".into(),
+        "summary" => "VSR".into(),
+        other => other.to_uppercase().replace('_', "-"),
+    }
+}
+
+async fn branding(state: &AppState, workspace_id: &str, session_id: &str, step_id: &str) -> AppResult<BrandingOut> {
+    let row: Option<(String, String, String, Option<String>)> = sqlx::query_as(
+        "SELECT company_name, doc_prefix, footer_text, logo_type FROM workspace_branding WHERE workspace_id = ?",
+    )
+    .bind(workspace_id)
+    .fetch_optional(&state.db)
+    .await?;
+    let Some((company_name, prefix, footer_text, logo_type)) = row else { return Ok(BrandingOut::default()) };
+    let logo = match logo_type {
+        Some(kind) => tokio::fs::read(state.config.data_dir.join("logos").join(workspace_id)).await.ok().map(|b| (kind, b)),
+        None => None,
+    };
+    let session: String = session_id.chars().filter(|c| c.is_ascii_hexdigit()).take(8).collect::<String>().to_uppercase();
+    let doc_number = if prefix.is_empty() { String::new() } else { format!("{prefix}{session}-{}", step_code(step_id)) };
+    Ok(BrandingOut { company_name, footer_text, doc_number, logo })
 }
 
 pub fn xml(s: &str) -> String {
@@ -341,6 +386,7 @@ pub async fn load(
         unknown: citations["unknown"].as_array().map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect()).unwrap_or_default(),
         exported_by: exported_by.to_string(),
         exported_at: crate::security::now(),
+        branding: branding(state, workspace_id, session_id, step_id).await?,
     })
 }
 

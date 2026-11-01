@@ -11,6 +11,7 @@ pub mod mfa;
 pub mod prompts;
 pub mod routes;
 pub mod security;
+pub mod standards;
 pub mod state;
 pub mod throttle;
 pub mod trace;
@@ -27,7 +28,7 @@ use crate::state::AppState;
 pub fn app(state: AppState) -> Router {
     let cors = CorsLayer::new()
         .allow_origin(state.config.app_url.parse::<HeaderValue>().ok().into_iter().collect::<Vec<_>>())
-        .allow_methods([Method::GET, Method::POST, Method::PATCH, Method::DELETE])
+        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::PATCH, Method::DELETE])
         .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE]);
 
     Router::new()

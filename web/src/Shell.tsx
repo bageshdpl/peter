@@ -53,6 +53,7 @@ export default function Shell() {
 
         <nav className="nav">
           <NavLink to="/" end>Projects</NavLink>
+          <NavLink to="/library">Library</NavLink>
           <NavLink to="/members">Members</NavLink>
           {isAdmin && <NavLink to="/audit">Audit trail</NavLink>}
           <NavLink to="/settings">Settings</NavLink>

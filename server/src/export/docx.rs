@@ -45,6 +45,46 @@ fn para(style: &str, runs: &str) -> String {
     format!("<w:p>{ppr}{runs}</w:p>")
 }
 
+/// An inline picture. `border` draws a thin frame (for screenshots).
+fn drawing(rid: &str, cx: i64, cy: i64, id: usize, name: &str, border: bool) -> String {
+    let name = xml(name);
+    let line = if border { r#"<a:ln w="6350"><a:solidFill><a:srgbClr val="DDE1E7"/></a:solidFill></a:ln>"# } else { "" };
+    format!(
+        r#"<w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="{cx}" cy="{cy}"/><wp:docPr id="{id}" name="{name}"/><wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr><pic:cNvPr id="{id}" name="{name}"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="{rid}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="{cx}" cy="{cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>{line}</pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing>"#
+    )
+}
+
+const NAMESPACES: &str = r#"xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture""#;
+
+/// The page header: logo on the left, company name on the right.
+fn header_xml(b: &super::BrandingOut) -> Option<String> {
+    if b.company_name.is_empty() && b.logo.is_none() {
+        return None;
+    }
+    let mut runs = String::new();
+    if let Some((_, bytes)) = &b.logo
+        && let Some((w, h)) = image_size(bytes)
+    {
+        // About 1.2 cm tall, at most 6 cm wide.
+        let cy = 432_000i64;
+        let mut cx = cy * w as i64 / h.max(1) as i64;
+        let mut cy2 = cy;
+        if cx > 2_160_000 {
+            cy2 = cy * 2_160_000 / cx;
+            cx = 2_160_000;
+        }
+        runs.push_str(&format!("<w:r>{}</w:r>", drawing("rIdLogo", cx, cy2, 9001, "Logo", false)));
+    }
+    if !b.company_name.is_empty() {
+        runs.push_str(r#"<w:r><w:tab/></w:r>"#);
+        runs.push_str(&run(&b.company_name, Fmt { bold: true, italic: false }, r#"<w:color w:val="17202B"/><w:sz w:val="20"/>"#));
+    }
+    Some(format!(
+        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr {NAMESPACES}><w:p><w:pPr><w:pStyle w:val="Footer"/><w:pBdr><w:bottom w:val="single" w:sz="4" w:space="4" w:color="DDE1E7"/></w:pBdr><w:spacing w:after="120"/></w:pPr>{runs}</w:p></w:hdr>"#
+    ))
+}
+
 fn page_break() -> &'static str {
     r#"<w:p><w:r><w:br w:type="page"/></w:r></w:p>"#
 }
@@ -146,10 +186,7 @@ impl<'a> Writer<'a> {
             cy = cy * MAX_IMAGE_EMU / cx;
             cx = MAX_IMAGE_EMU;
         }
-        let name = xml(name);
-        format!(
-            r#"<w:p><w:pPr><w:keepNext/></w:pPr><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="{cx}" cy="{cy}"/><wp:docPr id="{n}" name="{name}"/><wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr><pic:cNvPr id="{n}" name="{name}"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="{rid}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="{cx}" cy="{cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:ln w="6350"><a:solidFill><a:srgbClr val="DDE1E7"/></a:solidFill></a:ln></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>"#
-        )
+        format!(r#"<w:p><w:pPr><w:keepNext/></w:pPr><w:r>{}</w:r></w:p>"#, drawing(&rid, cx, cy, n, name, true))
     }
 
     fn document_xml(&mut self) -> String {
@@ -162,14 +199,18 @@ impl<'a> Writer<'a> {
         if !subtitle.is_empty() {
             x.push_str(&para("Subtitle", &run(&subtitle, Fmt::default(), "")));
         }
-        let mut facts = vec![
+        let mut facts = Vec::new();
+        if !d.branding.doc_number.is_empty() {
+            facts.push(vec!["Document number".to_string(), d.branding.doc_number.clone()]);
+        }
+        facts.extend([
             vec!["Workspace".to_string(), d.workspace_name.clone()],
             vec!["Session".to_string(), d.session_title.clone()],
             vec!["Validation type".to_string(), d.type_title.clone()],
             vec!["Step".to_string(), d.step_label.clone()],
             vec!["Document version".to_string(), d.version.to_string()],
             vec!["Version made by".to_string(), format!("{} ({}) on {}", d.version_by, d.version_origin, utc(d.version_at))],
-        ];
+        ]);
         if let Some(model) = &d.model {
             facts.push(vec!["AI provider and model".to_string(), model.clone()]);
         }
@@ -241,9 +282,10 @@ impl<'a> Writer<'a> {
         let rows: Vec<Vec<String>> = d.history.iter().map(|h| vec![h.version.to_string(), h.description.clone(), h.by.clone(), utc(h.at)]).collect();
         x.push_str(&self.simple_table(&["Version", "Made by", "Person", "When"], &rows));
 
+        let header_ref = if header_xml(&d.branding).is_some() { r#"<w:headerReference w:type="default" r:id="rIdHeader"/>"# } else { "" };
         format!(
             r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><w:body>{x}<w:sectPr><w:footerReference w:type="default" r:id="rIdFooter"/><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1418" w:right="1418" w:bottom="1418" w:left="1418" w:header="709" w:footer="709" w:gutter="0"/></w:sectPr></w:body></w:document>"#
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><w:body>{x}<w:sectPr>{header_ref}<w:footerReference w:type="default" r:id="rIdFooter"/><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1418" w:right="1418" w:bottom="1418" w:left="1418" w:header="709" w:footer="709" w:gutter="0"/></w:sectPr></w:body></w:document>"#
         )
     }
 }
@@ -265,6 +307,17 @@ const STYLES: &str = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:style w:type="table" w:styleId="PeterTable"><w:name w:val="Peter Table"/><w:tblPr><w:tblBorders><w:top w:val="single" w:sz="4" w:color="C9CFD8"/><w:left w:val="single" w:sz="4" w:color="C9CFD8"/><w:bottom w:val="single" w:sz="4" w:color="C9CFD8"/><w:right w:val="single" w:sz="4" w:color="C9CFD8"/><w:insideH w:val="single" w:sz="4" w:color="C9CFD8"/><w:insideV w:val="single" w:sz="4" w:color="C9CFD8"/></w:tblBorders><w:tblCellMar><w:top w:w="40" w:type="dxa"/><w:left w:w="90" w:type="dxa"/><w:bottom w:w="40" w:type="dxa"/><w:right w:w="90" w:type="dxa"/></w:tblCellMar></w:tblPr></w:style>
 </w:styles>"#;
 
+/// "Confidential · ACME-CSV-7F3A9C21-URS · Version 2" (parts present only when set).
+fn footer_left(doc: &ExportDoc) -> String {
+    let id = if doc.branding.doc_number.is_empty() { doc.title.clone() } else { doc.branding.doc_number.clone() };
+    let mut parts = Vec::new();
+    if !doc.branding.footer_text.is_empty() {
+        parts.push(doc.branding.footer_text.clone());
+    }
+    parts.push(format!("{id} · Version {}", doc.version));
+    parts.join(" · ")
+}
+
 pub fn write(doc: &ExportDoc) -> Result<Vec<u8>, String> {
     let mut w = Writer { doc, images: Vec::new() };
     let document = w.document_xml();
@@ -272,7 +325,7 @@ pub fn write(doc: &ExportDoc) -> Result<Vec<u8>, String> {
     let footer = format!(
         r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:p><w:pPr><w:pStyle w:val="Footer"/></w:pPr>{}<w:r><w:tab/></w:r>{}<w:fldSimple w:instr=" PAGE "><w:r><w:t>1</w:t></w:r></w:fldSimple>{}<w:fldSimple w:instr=" NUMPAGES "><w:r><w:t>1</w:t></w:r></w:fldSimple></w:p></w:ftr>"#,
-        run(&format!("{} · Version {}", doc.title, doc.version), Fmt::default(), ""),
+        run(&footer_left(doc), Fmt::default(), ""),
         run("Page ", Fmt::default(), ""),
         run(" of ", Fmt::default(), ""),
     );
@@ -281,6 +334,10 @@ pub fn write(doc: &ExportDoc) -> Result<Vec<u8>, String> {
         r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdStyles" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/><Relationship Id="rIdFooter" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/>"#,
     );
+    let header = header_xml(&doc.branding);
+    if header.is_some() {
+        rels.push_str(r#"<Relationship Id="rIdHeader" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/>"#);
+    }
     for (i, (rid, _, ext)) in w.images.iter().enumerate() {
         rels.push_str(&format!(
             r#"<Relationship Id="{rid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image{}.{ext}"/>"#,
@@ -289,8 +346,15 @@ pub fn write(doc: &ExportDoc) -> Result<Vec<u8>, String> {
     }
     rels.push_str("</Relationships>");
 
-    let content_types = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="jpeg" ContentType="image/jpeg"/><Default Extension="png" ContentType="image/png"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/><Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/></Types>"#;
+    let header_type = if header.is_some() {
+        r#"<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>"#
+    } else {
+        ""
+    };
+    let content_types = format!(
+        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="jpeg" ContentType="image/jpeg"/><Default Extension="png" ContentType="image/png"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/><Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>{header_type}<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/></Types>"#
+    );
     let root_rels = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/></Relationships>"#;
     let core = format!(
@@ -314,6 +378,18 @@ pub fn write(doc: &ExportDoc) -> Result<Vec<u8>, String> {
     add("word/document.xml", document.as_bytes(), opts)?;
     add("word/styles.xml", STYLES.as_bytes(), opts)?;
     add("word/footer1.xml", footer.as_bytes(), opts)?;
+    if let Some(h) = &header {
+        add("word/header1.xml", h.as_bytes(), opts)?;
+        if let Some((kind, bytes)) = &doc.branding.logo {
+            let ext = if kind == "image/png" { "png" } else { "jpeg" };
+            let hrels = format!(
+                r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdLogo" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/logo.{ext}"/></Relationships>"#
+            );
+            add("word/_rels/header1.xml.rels", hrels.as_bytes(), opts)?;
+            add(&format!("word/media/logo.{ext}"), bytes, stored)?;
+        }
+    }
     add("word/_rels/document.xml.rels", rels.as_bytes(), opts)?;
     for (i, (_, bytes, ext)) in w.images.iter().enumerate() {
         // Images are already compressed.

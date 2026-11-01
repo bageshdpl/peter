@@ -131,6 +131,25 @@ The AI prompts ask for these formats, and edited documents work the same way.
 Traceability document, marked "built by Peter (no AI)". The matrix also
 exports to Excel (matrix, tests, open items).
 
+## Library
+
+Open **Library** in the sidebar. Everyone can see it; admins change it.
+
+- **Regulations.** Choose the regulations your company works to: 21 CFR
+  Part 11, EU GMP Annex 11, GAMP 5 software categories, ALCOA+ and ICH Q9(R1).
+  Drafts then name the relevant clauses, for example "(21 CFR 11.10(e))". The
+  clause summaries are Peter's own wording for orientation, not the official
+  text.
+- **Templates.** Upload your company's template for any document (Word, PDF,
+  text or Markdown). Peter reads its text and drafts follow its headings,
+  order and table columns. One per document; uploading again replaces it
+  (the old one is kept, hidden, as a record). You can preview exactly the
+  text Peter reads.
+- **Branding.** Company name, logo (PNG or JPEG up to 1 MB), document number
+  prefix and footer text. Every Word export then shows the logo and name in
+  the page header, a document number such as `ACME-CSV-7F3A9C21-URS` on the
+  cover, and the footer text on every page.
+
 ## Security
 
 Open **Security** in the sidebar.
@@ -324,6 +343,19 @@ and `open_comments`.
 Wrong passwords or codes beyond the limit answer `429` with code `locked`.
 When a workspace requires two-factor sign-in and you have not set it up,
 other calls answer `403` with code `mfa_setup_required`.
+
+## API (library)
+
+| Method and path | Who | What |
+| --- | --- | --- |
+| `GET /v1/library/standards` | member | the catalog and which are selected |
+| `PUT /v1/library/standards` | admin | `selected`: list of ids (`part11`, `annex11`, `gamp5`, `alcoa`, `ichq9`) |
+| `GET /v1/library/templates` | member | current templates, and the steps that can have one |
+| `POST /v1/library/templates` | admin | multipart: `file`, `step_id`, optional `name` |
+| `GET /v1/library/templates/{id}` | member | the text Peter reads from it |
+| `DELETE /v1/library/templates/{id}` | admin | stop using it |
+| `GET /v1/workspace/branding`, `PUT` | member, admin | `company_name`, `doc_prefix`, `footer_text` |
+| `GET /v1/workspace/branding/logo`, `POST`, `DELETE` | member, admin | the logo (multipart `file` to upload) |
 
 ### Roles
 

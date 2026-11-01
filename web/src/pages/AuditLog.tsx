@@ -43,6 +43,11 @@ const ACTIONS: Record<string, string> = {
   "step.status_changed": "Changed a step's status",
   "observation.removed": "Removed an observed step",
   "extension.connected": "Connected the extension",
+  "library.standards_changed": "Changed the regulations in scope",
+  "library.template_added": "Added a company template",
+  "library.template_removed": "Removed a company template",
+  "library.branding_changed": "Changed the branding",
+  "library.logo_changed": "Changed the logo",
 };
 
 /** "name: Old → New; vendor: … " for update events. */
@@ -76,6 +81,10 @@ function describe(e: AuditEvent): string {
       return d.require_mfa ? "required" : "optional";
     case "document.signed":
       return `${String(d.meaning)}, version ${String(d.version)}`;
+    case "library.template_added":
+      return String(d.name ?? "");
+    case "library.standards_changed":
+      return Array.isArray(d.selected) ? (d.selected as string[]).join(", ") || "none" : "";
     case "document.exported":
       return String(d.format ?? "").toUpperCase();
     case "project.created":

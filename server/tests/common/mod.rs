@@ -111,6 +111,31 @@ impl Api {
         (status, serde_json::from_slice(&bytes).unwrap_or(Value::Null))
     }
 
+    /// Uploads `bytes` as field `file`, plus extra text fields.
+    pub async fn upload_with(&self, path: &str, token: &str, filename: &str, bytes: &[u8], fields: &[(&str, &str)]) -> (StatusCode, Value) {
+        let boundary = "peter-test-boundary";
+        let mut body = Vec::new();
+        for (name, value) in fields {
+            body.extend_from_slice(format!("--{boundary}\r\nContent-Disposition: form-data; name=\"{name}\"\r\n\r\n{value}\r\n").as_bytes());
+        }
+        body.extend_from_slice(
+            format!("--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{filename}\"\r\nContent-Type: application/octet-stream\r\n\r\n").as_bytes(),
+        );
+        body.extend_from_slice(bytes);
+        body.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
+        let req = Request::builder()
+            .method("POST")
+            .uri(path)
+            .header(header::AUTHORIZATION, format!("Bearer {token}"))
+            .header(header::CONTENT_TYPE, format!("multipart/form-data; boundary={boundary}"))
+            .body(Body::from(body))
+            .unwrap();
+        let res = self.app.clone().oneshot(req).await.unwrap();
+        let status = res.status();
+        let bytes = res.into_body().collect().await.unwrap().to_bytes();
+        (status, serde_json::from_slice(&bytes).unwrap_or(Value::Null))
+    }
+
     /// GET returning the raw response (for downloads).
     pub async fn raw_get(&self, path: &str, token: &str) -> (StatusCode, axum::http::HeaderMap, Vec<u8>) {
         let req = Request::builder().uri(path).header(header::AUTHORIZATION, format!("Bearer {token}")).body(Body::empty()).unwrap();

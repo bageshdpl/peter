@@ -2,6 +2,7 @@ mod audit;
 mod auth;
 mod documents;
 mod extension;
+mod library;
 mod members;
 mod observations;
 mod projects;
@@ -101,6 +102,20 @@ pub fn router(max_upload_bytes: usize) -> Router<AppState> {
         .route("/auth/sessions/revoke-others", post(security::revoke_other_sessions))
         .route("/auth/sessions/{session_id}", delete(security::revoke_session))
         .route("/workspace/security", axum::routing::put(security::set_policy))
+        .route("/library/standards", get(library::list_standards).put(library::set_standards))
+        .route(
+            "/library/templates",
+            get(library::list_templates).post(library::upload_template).layer(DefaultBodyLimit::max(10 * 1024 * 1024 + 64 * 1024)),
+        )
+        .route("/library/templates/{template_id}", get(library::get_template).delete(library::remove_template))
+        .route("/workspace/branding", get(library::get_branding).put(library::set_branding))
+        .route(
+            "/workspace/branding/logo",
+            get(library::get_logo)
+                .post(library::upload_logo)
+                .delete(library::remove_logo)
+                .layer(DefaultBodyLimit::max(library::MAX_LOGO_BYTES + 64 * 1024)),
+        )
 }
 
 /// JSON body extractor whose errors use the API's error shape.

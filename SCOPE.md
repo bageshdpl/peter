@@ -77,7 +77,7 @@ Each module is decided on its own: in, later, or out.
 - Traceability: every requirement linked to a test and its evidence.
 - Export to Word and Excel; PDF later.
 
-### M6. Library
+### M6. Library (done: regulations, templates, branding)
 - Templates, reference documents, standards (for example 21 CFR Part 11, EU Annex 11, GAMP 5).
 - Workspace branding: logo, document header and footer template.
 

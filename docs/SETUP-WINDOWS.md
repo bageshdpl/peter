@@ -1,14 +1,89 @@
 # Run Peter on Windows
 
-A step-by-step guide for Windows 10 or 11. Allow about 30 minutes the first
-time; most of it is waiting for installs. Afterwards, starting Peter takes a
-minute.
+There are two ways. **Most people want Option A.**
 
-You will use **PowerShell**: press the Windows key, type `PowerShell`, and
-open **Windows PowerShell**. Copy each command, paste it with a right-click,
-and press Enter.
+| | Option A: ready-to-run | Option B: build from source |
+| --- | --- | --- |
+| Admin rights | **Not needed** | Needed (installs Node.js and C++ Build Tools) |
+| What you install | Nothing | Git, Node.js, Build Tools, Rust |
+| Time | 5 minutes | About 30 minutes |
+| For | Using Peter | Changing Peter's code |
 
 ---
+
+# Option A: ready-to-run (no admin rights)
+
+## 1. Download
+
+1. Go to **https://github.com/bageshdpl/peter/releases/latest** (sign in to
+   GitHub if asked; the repository is private).
+2. Under **Assets**, download `Peter-<version>-windows.zip`.
+3. **Before unzipping:** right-click the zip, choose **Properties**, tick
+   **Unblock** at the bottom, click **OK**. This stops Windows asking about
+   every file.
+4. Right-click the zip and choose **Extract All…**. Pick a folder in your user
+   folder, for example `Documents`. You get a `Peter` folder.
+
+## 2. Start Peter
+
+Double-click **`start-peter.cmd`** in the `Peter` folder.
+
+- A black window opens. **Keep it open** while you use Peter; closing it stops
+  Peter.
+- After a few seconds Chrome opens **http://localhost:5173**. Click
+  **Create an account**. The account exists only on your computer.
+- If Windows shows **"Windows protected your PC"**, click **More info**, then
+  **Run anyway**. (You skipped the Unblock step; it is harmless.)
+
+## 3. Add the Peter Observer extension to Chrome (once)
+
+1. In Chrome, go to `chrome://extensions`.
+2. Turn on **Developer mode** (top right).
+3. Click **Load unpacked** and choose the **`extension`** folder inside your
+   `Peter` folder.
+4. Click the puzzle-piece icon in Chrome's toolbar and pin **Peter Observer**.
+
+Then follow **Part 5. Try it** further down.
+
+## 4. Turn on AI drafting (optional)
+
+1. Get a key from **OpenRouter** (https://openrouter.ai, **Keys**) and/or
+   **Google AI Studio** (https://aistudio.google.com, **Get API key**).
+2. In the `Peter` folder, copy **`my-keys.example.cmd`** and name the copy
+   **`my-keys.cmd`**.
+3. Right-click `my-keys.cmd`, choose **Edit** (or open it with Notepad). On the
+   line for your provider, delete `rem ` at the start and paste your key in
+   place of the placeholder. Save.
+4. Close the black window and double-click `start-peter.cmd` again.
+
+> Keep `my-keys.cmd` private. Never email, upload or share it, and never paste
+> a key into a chat.
+
+## Your data and updates
+
+- Everything is saved in the `Peter` folder: `peter.db` and the `peter-data`
+  folder. Back up those two to keep your work.
+- To update: download the new zip, unzip it to a new folder, and copy
+  `peter.db`, `peter-data` and `my-keys.cmd` from the old folder into the new
+  one. Then reload the extension at `chrome://extensions` from the new
+  `extension` folder.
+
+## If something goes wrong (Option A)
+
+| What you see | What to do |
+| --- | --- |
+| "Windows protected your PC" | Click **More info**, then **Run anyway**. |
+| "This app has been blocked by your system administrator" | Your company blocks programs from running in user folders. Ask IT to allow `peter-server.exe`, or use a computer where it is allowed. |
+| The black window closes at once | Open the `Peter` folder, click the address bar, type `cmd`, press Enter, then type `start-peter.cmd` and press Enter. The message that stays on screen says what went wrong. |
+| `address already in use` | Peter is already running in another window. Close the other one. |
+| The browser says the page cannot be reached | Wait a few seconds and refresh: Peter takes a moment to start. Check the black window is still open. |
+
+---
+
+# Option B: build from source (needs admin rights)
+
+Use this only if you want to change Peter's code. It installs developer tools,
+which most company laptops only allow with admin rights.
 
 ## Part 1. Install the tools (once)
 

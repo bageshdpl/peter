@@ -5,3 +5,7 @@
 *.png binary
 *.docx binary
 *.xlsx binary
+
+# Windows scripts and text files need Windows line endings.
+*.cmd text eol=crlf
+packaging/windows/*.txt text eol=crlf

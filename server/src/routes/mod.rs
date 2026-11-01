@@ -109,6 +109,7 @@ pub fn router(max_upload_bytes: usize) -> Router<AppState> {
         )
         .route("/library/templates/{template_id}", get(library::get_template).delete(library::remove_template))
         .route("/workspace/branding", get(library::get_branding).put(library::set_branding))
+        .fallback(|| async { AppError::not_found("No such API endpoint.") })
         .route(
             "/workspace/branding/logo",
             get(library::get_logo)

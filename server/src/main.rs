@@ -11,10 +11,14 @@ async fn main() -> Result<(), BoxError> {
 
     let config = Config::from_env();
     let bind = config.bind.clone();
+    let state_has_web = config.web_dir.as_ref().is_some_and(|d| d.join("index.html").is_file());
     let state = AppState::connect(config, Arc::new(ConsoleMailer)).await?;
 
     let listener = tokio::net::TcpListener::bind(&bind).await?;
     tracing::info!("Peter API listening on http://{bind}");
+    if state_has_web {
+        tracing::info!("Peter is ready: open http://{} in Chrome", bind.replace("127.0.0.1", "localhost"));
+    }
     axum::serve(listener, peter_server::app(state))
         .with_graceful_shutdown(async {
             let _ = tokio::signal::ctrl_c().await;

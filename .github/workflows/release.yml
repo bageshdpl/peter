@@ -1,0 +1,91 @@
+# Builds the ready-to-run Windows package (server, web app and extension in
+# one zip). A pushed tag like v0.2.0 publishes it as a GitHub release; running
+# the workflow by hand only keeps the zip as a downloadable artifact.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    name: Windows package
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.97.0"
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: server
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build the server
+        working-directory: server
+        run: cargo build --release --locked
+
+      - name: Build the web app
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $version = if ($env:GITHUB_REF_TYPE -eq "tag") { $env:GITHUB_REF_NAME } else { "dev-" + $env:GITHUB_SHA.Substring(0, 7) }
+          New-Item -ItemType Directory -Path Peter | Out-Null
+          Copy-Item server/target/release/peter-server.exe Peter/
+          Copy-Item -Recurse web/dist Peter/web
+          Copy-Item -Recurse extension Peter/extension
+          Copy-Item packaging/windows/start-peter.cmd, packaging/windows/my-keys.example.cmd, packaging/windows/README-FIRST.txt Peter/
+          $zip = "Peter-$version-windows.zip"
+          Compress-Archive -Path Peter -DestinationPath $zip
+          "ZIP=$zip" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      # Starts the packaged server the way start-peter.cmd does and checks the
+      # app and the API answer, so a broken package is never published.
+      - name: Smoke-test the package
+        shell: pwsh
+        working-directory: Peter
+        run: |
+          $env:PETER_BIND = "127.0.0.1:5173"
+          $env:PETER_WEB_DIR = (Resolve-Path web).Path
+          $server = Start-Process -FilePath .\peter-server.exe -PassThru -NoNewWindow
+          try {
+            $ok = $false
+            for ($i = 0; $i -lt 30 -and -not $ok; $i++) {
+              Start-Sleep -Seconds 1
+              try { $ok = (Invoke-WebRequest http://127.0.0.1:5173/healthz -UseBasicParsing).Content -eq "ok" } catch {}
+            }
+            if (-not $ok) { throw "The server did not start." }
+            $page = Invoke-WebRequest http://127.0.0.1:5173/sessions/example -UseBasicParsing
+            if ($page.Content -notmatch "<div id=`"root`">") { throw "The web app was not served." }
+            $body = '{"email":"smoke@example.com","password":"smoke-test-pass-1","name":"Smoke","workspace_name":"Smoke"}'
+            $signup = Invoke-RestMethod -Method Post http://127.0.0.1:5173/v1/auth/signup -ContentType "application/json" -Body $body
+            if (-not $signup.access_token) { throw "Sign-up failed." }
+            Write-Output "Package works: web app served, sign-up OK."
+          } finally {
+            Stop-Process -Id $server.Id -Force
+          }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: peter-windows
+          path: ${{ env.ZIP }}
+
+      - name: Publish the release
+        if: github.ref_type == 'tag'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create $env:GITHUB_REF_NAME $env:ZIP --title "Peter $env:GITHUB_REF_NAME for Windows" --notes-file packaging/windows/RELEASE_NOTES.md

@@ -9,7 +9,9 @@ it does and the build plan.
 | Web app (React) | `web/` | sign-in, projects, guided sessions with AI drafts, comments, signatures, exports, members, audit trail, settings |
 | Observer extension | `extension/` | records steps and screenshots into a session ([setup](extension/README.md)) |
 
-**On Windows?** Follow the step-by-step guide: [docs/SETUP-WINDOWS.md](docs/SETUP-WINDOWS.md).
+**On Windows?** Download the ready-to-run zip from
+[Releases](https://github.com/bageshdpl/peter/releases/latest): no installation
+and no admin rights needed. Step by step: [docs/SETUP-WINDOWS.md](docs/SETUP-WINDOWS.md).
 
 ## Get the code
 
@@ -213,6 +215,7 @@ window (or a private window) without email.
 | `PETER_ALLOW_SIGNUP` | `true` | `false` makes the API invite-only |
 | `PETER_DATA_DIR` | `peter-data` | folder for uploaded files |
 | `PETER_MAX_UPLOAD_MB` | `25` | largest file accepted |
+| `PETER_WEB_DIR` | none | folder of the built web app (`web/dist`); the server then serves the app too, so no Node.js is needed |
 
 ## API (M0)
 

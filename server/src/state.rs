@@ -20,6 +20,8 @@ pub struct Config {
     pub data_dir: std::path::PathBuf,
     pub max_upload_bytes: usize,
     pub ai: crate::ai::AiConfig,
+    /// The built web app to serve alongside the API (the ready-to-run package).
+    pub web_dir: Option<std::path::PathBuf>,
 }
 
 impl Config {
@@ -40,6 +42,7 @@ impl Config {
             data_dir: var("PETER_DATA_DIR", "peter-data").into(),
             max_upload_bytes: num("PETER_MAX_UPLOAD_MB", 25) as usize * 1024 * 1024,
             ai: crate::ai::AiConfig::from_env(),
+            web_dir: std::env::var("PETER_WEB_DIR").ok().filter(|v| !v.is_empty()).map(Into::into),
         }
     }
 

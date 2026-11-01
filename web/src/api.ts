@@ -114,6 +114,21 @@ export interface DocumentView {
   versions?: { version: number; origin: string; provider: string | null; model: string | null; created_by_name: string; created_at: number }[];
   title: string | null;
   draftable: boolean;
+  signatures?: Signature[];
+  open_comments?: number;
+}
+export interface Signature { version: number; meaning: "reviewed" | "approved"; signer_name: string; signer_email: string; signed_at: number }
+export interface Comment {
+  id: string;
+  parent_id: string | null;
+  version: number;
+  quote: string;
+  body: string;
+  author_id: string;
+  author_name: string;
+  created_at: number;
+  resolved_at: number | null;
+  resolved_by_name: string | null;
 }
 
 export class ApiError extends Error {

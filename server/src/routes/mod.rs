@@ -5,6 +5,7 @@ mod extension;
 mod members;
 mod observations;
 mod projects;
+mod review;
 mod sessions;
 mod sources;
 mod workspace;
@@ -78,6 +79,13 @@ pub fn router(max_upload_bytes: usize) -> Router<AppState> {
         .route("/sessions/{id}/documents/{step_id}", get(documents::get).put(documents::save))
         .route("/sessions/{id}/documents/{step_id}/draft", post(documents::start_draft))
         .route("/sessions/{id}/documents/{step_id}/versions/{version}", get(documents::get_version))
+        .route("/sessions/{id}/documents/{step_id}/comments", get(review::list_comments).post(review::add_comment))
+        .route("/comments/{comment_id}/resolve", post(review::resolve_comment))
+        .route("/comments/{comment_id}/reopen", post(review::reopen_comment))
+        .route("/sessions/{id}/documents/{step_id}/signatures", post(review::sign))
+        .route("/sessions/{id}/documents/{step_id}/export/docx", get(review::export_docx))
+        .route("/sessions/{id}/documents/{step_id}/export/xlsx", get(review::export_xlsx))
+        .route("/sessions/{id}/export", get(review::export_package))
 }
 
 /// JSON body extractor whose errors use the API's error shape.

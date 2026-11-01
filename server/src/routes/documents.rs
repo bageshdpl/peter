@@ -147,6 +147,15 @@ pub async fn providers(State(state): State<AppState>, _auth: Auth) -> Json<Value
 }
 
 #[derive(Serialize, sqlx::FromRow)]
+struct SignatureView {
+    version: i64,
+    meaning: String,
+    signer_name: String,
+    signer_email: String,
+    signed_at: i64,
+}
+
+#[derive(Serialize, sqlx::FromRow)]
 struct VersionSummary {
     version: i64,
     origin: String,
@@ -186,7 +195,22 @@ pub async fn get(
     .fetch_all(&state.db)
     .await?;
     let current = version_body(&state, &session_id, &id, current_version).await?;
+    let signatures: Vec<SignatureView> = sqlx::query_as(
+        "SELECT version, meaning, signer_name, signer_email, signed_at FROM document_signatures
+         WHERE document_id = ? ORDER BY signed_at",
+    )
+    .bind(&id)
+    .fetch_all(&state.db)
+    .await?;
+    let (open_comments,): (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM document_comments WHERE document_id = ? AND parent_id IS NULL AND resolved_at IS NULL",
+    )
+    .bind(&id)
+    .fetch_one(&state.db)
+    .await?;
     Ok(Json(json!({
+        "signatures": signatures,
+        "open_comments": open_comments,
         "document": {
             "id": id, "step_id": step_id, "title": title, "status": status, "error": error,
             "current_version": current_version, "updated_at": updated_at,
@@ -331,6 +355,18 @@ pub async fn start_draft(
             id
         }
     };
+    // Drafting a step's document means work has started on that step.
+    sqlx::query(
+        "INSERT INTO step_states (session_id, step_id, status, updated_by, updated_at) VALUES (?, ?, 'in_progress', ?, ?)
+         ON CONFLICT (session_id, step_id) DO UPDATE SET status = 'in_progress', updated_by = excluded.updated_by,
+         updated_at = excluded.updated_at WHERE step_states.status = 'not_started'",
+    )
+    .bind(&session_id)
+    .bind(&step_id)
+    .bind(&auth.user_id)
+    .bind(t)
+    .execute(&mut *tx)
+    .await?;
     tx.commit().await?;
 
     publish(&state, &auth, &session_id, "document", json!({ "step_id": step_id, "status": "drafting" }));

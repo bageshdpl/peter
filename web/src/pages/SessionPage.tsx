@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import {
-  api, atLeast, formatTime,
+  api, atLeast, downloadFile, formatTime,
   type DocumentSummary, type Project, type StepState, type StepStatus, type ValidationSession, type ValidationType,
 } from "../api";
 import { useSession } from "../App";
@@ -143,6 +143,11 @@ export default function SessionPage() {
               )}
             </select>
           </label>
+          {data.documents.some((d) => d.current_version > 0) && (
+            <button className="btn ghost" onClick={() => downloadFile(`/v1/sessions/${id}/export`, `${session.title} validation package.zip`).catch((e) => setError(messageOf(e)))}>
+              Export package
+            </button>
+          )}
           {atLeast(me.workspace.role, "member") && (
             <button className="btn ghost" onClick={() => act(() => api("POST", `/v1/sessions/${id}/${archived ? "restore" : "archive"}`))}>
               {archived ? "Restore" : "Archive"}
@@ -227,6 +232,9 @@ export default function SessionPage() {
               steps={steps}
               projectId={session.project_id}
               canWrite={canWrite}
+              canComment={!archived}
+              canResolveAny={atLeast(me.workspace.role, "member") && !archived}
+              userId={me.user.id}
               events={events}
               onGoToStep={goTo}
             />

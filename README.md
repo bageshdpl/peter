@@ -5,8 +5,8 @@ it does and the build plan.
 
 | Part | Folder | Status |
 | --- | --- | --- |
-| API server (Rust) | `server/` | M0 Foundation, M1 Projects and sessions, M2 Observation, M3 Guided steps, M4 AI drafting |
-| Web app (React) | `web/` | sign-in, projects, guided sessions with AI drafts, sources, members, audit trail, settings |
+| API server (Rust) | `server/` | M0–M5: foundation, projects and sessions, observation, guided steps, AI drafting, review and export |
+| Web app (React) | `web/` | sign-in, projects, guided sessions with AI drafts, comments, signatures, exports, members, audit trail, settings |
 | Observer extension | `extension/` | records steps and screenshots into a session ([setup](extension/README.md)) |
 
 ## Run the API locally
@@ -77,6 +77,29 @@ How drafting works:
   evidence that does not exist are flagged in red on the page.
 - Every draft and every edit is a new version; older versions stay readable.
   Drafts, edits and failures are in the audit trail.
+
+## Review and export (M5)
+
+- **Comments.** Anyone in the workspace, viewers included, can comment on a
+  document; select text in it first to comment on that passage. Threads take
+  replies and can be resolved and reopened by the person who raised them or by
+  any member.
+- **Signatures.** Members sign the current version as *Reviewed* or
+  *Approved* after re-entering their password. The signer's name and email,
+  the meaning and the time are stored with that version and can never be
+  changed or removed. A new version starts unsigned. Peter records signatures
+  in the spirit of 21 CFR Part 11 but has not been assessed for compliance.
+- **Word export.** Cover page (system, session, step, version, who made it,
+  AI model), signatures (or blank signature lines), the open-gap warning, the
+  document, then appendices: observed steps cited with their screenshots and
+  SHA-256, source files cited with SHA-256, and the version history. Any
+  version can be exported.
+- **Excel export.** Every table in the document, one sheet each, with a frozen
+  header row and filters.
+- **Session package.** A ZIP with every drafted document (Word, plus Excel
+  where it has tables), all observed steps as CSV, and a README index.
+
+Every export is recorded in the audit trail.
 
 ## Run the web app locally
 
@@ -201,6 +224,21 @@ stored.
 
 `GET /v1/sessions/{id}` also returns `step_states` and `documents`. The event
 stream adds `step` and `document` events.
+
+## API (M5)
+
+| Method and path | Who | What |
+| --- | --- | --- |
+| `GET /v1/sessions/{id}/documents/{step_id}/comments` | member | comments and replies |
+| `POST /v1/sessions/{id}/documents/{step_id}/comments` | any role | `body`, optional `quote`, optional `parent_id` to reply |
+| `POST /v1/comments/{id}/resolve`, `/reopen` | its author, or member+ | threads only |
+| `POST /v1/sessions/{id}/documents/{step_id}/signatures` | member+ | `version` (the current one), `meaning` (`reviewed`/`approved`), `password` |
+| `GET /v1/sessions/{id}/documents/{step_id}/export/docx?version=` | member | Word file |
+| `GET /v1/sessions/{id}/documents/{step_id}/export/xlsx?version=` | member | Excel file of the tables (422 if none) |
+| `GET /v1/sessions/{id}/export` | member | ZIP package of the session |
+
+The document view (`GET .../documents/{step_id}`) also returns `signatures`
+and `open_comments`.
 
 ### Roles
 

@@ -121,6 +121,8 @@ async fn sample_draft_then_edit_with_versions() {
 
     let doc = draft(&api, &t, &sid, "observe", "sample").await;
     assert_eq!(doc["document"]["status"], "ready", "{doc}");
+    let (_, session) = api.call("GET", &format!("/v1/sessions/{sid}"), Some(&t), None).await;
+    assert_eq!(session["step_states"][0]["status"], "in_progress", "drafting starts the step");
     assert_eq!(doc["title"], "Observation summary");
     let current = &doc["current"];
     assert_eq!((current["version"].as_i64(), current["origin"].as_str()), (Some(1), Some("ai")));

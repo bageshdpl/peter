@@ -5,6 +5,7 @@ pub mod auth;
 pub mod catalog;
 pub mod drafting;
 pub mod error;
+pub mod export;
 pub mod extract;
 pub mod prompts;
 pub mod routes;

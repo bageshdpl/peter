@@ -3,6 +3,7 @@ import { api, downloadFile, formatTime, type DocumentVersion, type DocumentView,
 import type { SessionEvents } from "./events";
 import { Markdown } from "./markdown";
 import { Zoom } from "./observe";
+import { CommentsPanel, ExportButtons, SignaturePanel } from "./review";
 import { messageOf, Notice } from "./ui";
 
 let providersCache: Promise<Provider[]> | null = null;
@@ -26,10 +27,16 @@ export function DocumentPanel(props: {
   steps: Step[];
   projectId: string | null;
   canWrite: boolean;
+  /** Commenting is open to every role, viewers included, unless archived. */
+  canComment: boolean;
+  /** Members and above may resolve anyone's comment. */
+  canResolveAny: boolean;
+  userId: string;
   events: SessionEvents;
   onGoToStep: (stepId: string) => void;
 }) {
-  const { sessionId, step, steps, projectId, canWrite, events, onGoToStep } = props;
+  const { sessionId, step, steps, projectId, canWrite, canComment, canResolveAny, userId, events, onGoToStep } = props;
+  const [quote, setQuote] = useState("");
   const providers = useProviders();
   const [view, setView] = useState<DocumentView | null>(null);
   const [shown, setShown] = useState<DocumentVersion | null>(null); // An older version being looked at.
@@ -132,7 +139,16 @@ export function DocumentPanel(props: {
   const chosen = providers?.find((p) => p.id === provider);
   const stepTitle = (id: string) => steps.find((s) => s.id === id)?.label ?? id;
 
+  // The server's check decides what is missing, for every kind of citation.
+  const missing = new Set(version?.citations.unknown ?? []);
   const chip = (id: string, key: string) => {
+    if (missing.has(id)) {
+      return (
+        <span key={key} className="cite missing" title="Cites evidence that does not exist">
+          {id}
+        </span>
+      );
+    }
     if (id.startsWith("O")) {
       const o = version?.observations[id];
       return (
@@ -180,15 +196,20 @@ export function DocumentPanel(props: {
             </p>
           )}
         </div>
-        {doc && (view.versions?.length ?? 0) > 1 && (
-          <select aria-label="Version" value={shown?.version ?? doc.current_version} onChange={(e) => showVersion(Number(e.target.value))}>
-            {view.versions!.map((v) => (
-              <option key={v.version} value={v.version}>
-                v{v.version} · {v.origin === "ai" ? v.provider : "edit"} · {v.created_by_name}
-              </option>
-            ))}
-          </select>
-        )}
+        <div className="doc-tools">
+          {doc && (view.versions?.length ?? 0) > 1 && (
+            <select aria-label="Version" value={shown?.version ?? doc.current_version} onChange={(e) => showVersion(Number(e.target.value))}>
+              {view.versions!.map((v) => (
+                <option key={v.version} value={v.version}>
+                  v{v.version} · {v.origin === "ai" ? v.provider : "edit"} · {v.created_by_name}
+                </option>
+              ))}
+            </select>
+          )}
+          {version && editing === null && (
+            <ExportButtons base={path} title={view.title ?? "Document"} version={version.version} hasTables={/^\s*\|?\s*:?-{3,}/m.test(version.body)} />
+          )}
+        </div>
       </div>
 
       {error && <Notice kind="error">{error}</Notice>}
@@ -260,7 +281,21 @@ export function DocumentPanel(props: {
               <span className="bad">Cites evidence that does not exist: {cit!.unknown!.join(", ")}. Check those statements.</span>
             )}
           </div>
-          <Markdown text={version.body} handlers={{ chip }} />
+          {/* Selecting text in the document sets the quote for a new comment. */}
+          <div
+            onMouseUp={() => {
+              const text = window.getSelection()?.toString().trim() ?? "";
+              if (text && canComment) setQuote(text.slice(0, 1000));
+            }}
+          >
+            <Markdown text={version.body} handlers={{ chip }} />
+          </div>
+          {!shown && (
+            <SignaturePanel base={path} title={view.title ?? "Document"} version={version.version}
+              signatures={view.signatures ?? []} canSign={canWrite} onSigned={load} />
+          )}
+          <CommentsPanel base={path} stepId={step.id} userId={userId} canResolveAny={canResolveAny}
+            canComment={canComment} quote={quote} clearQuote={() => setQuote("")} events={events} />
         </>
       ) : (
         !drafting && <p className="muted">Nothing drafted yet for this step.</p>

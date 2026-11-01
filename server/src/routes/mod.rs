@@ -1,6 +1,8 @@
 mod audit;
 mod auth;
+mod extension;
 mod members;
+mod observations;
 mod projects;
 mod sessions;
 mod sources;
@@ -57,6 +59,18 @@ pub fn router(max_upload_bytes: usize) -> Router<AppState> {
         .route("/sessions/{id}", get(sessions::get).patch(sessions::update))
         .route("/sessions/{id}/archive", post(sessions::archive))
         .route("/sessions/{id}/restore", post(sessions::restore))
+        .route("/auth/extension-code", post(extension::create_code))
+        .route("/auth/extension-exchange", post(extension::exchange))
+        .route(
+            "/sessions/{id}/observations",
+            get(observations::list)
+                .post(observations::create)
+                // A screenshot is sent base64-encoded inside the JSON.
+                .layer(DefaultBodyLimit::max(observations::MAX_SCREENSHOT_BYTES / 3 * 4 + 64 * 1024)),
+        )
+        .route("/sessions/{id}/observations/{observation_id}", delete(observations::remove))
+        .route("/sessions/{id}/observations/{observation_id}/screenshot", get(observations::screenshot))
+        .route("/sessions/{id}/events", get(observations::events))
 }
 
 /// JSON body extractor whose errors use the API's error shape.

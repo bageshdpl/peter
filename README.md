@@ -5,9 +5,9 @@ it does and the build plan.
 
 | Part | Folder | Status |
 | --- | --- | --- |
-| API server (Rust) | `server/` | M0 Foundation, M1 Projects and sessions |
+| API server (Rust) | `server/` | M0 Foundation, M1 Projects and sessions, M2 Observation |
 | Web app (React) | `web/` | sign-in, projects, sessions, sources, members, audit trail, settings |
-| Observer extension | `extension/` | not started |
+| Observer extension | `extension/` | records steps and screenshots into a session ([setup](extension/README.md)) |
 
 ## Run the API locally
 
@@ -120,6 +120,23 @@ Uploads accept PDF, Word (.docx), Excel (.xlsx), CSV, text, Markdown, PNG and
 JPEG. The file type comes from the extension, and each file's SHA-256 is
 recorded. Only Initial validation can be started so far; the other types are
 listed with their steps and marked unavailable.
+
+## API (M2)
+
+| Method and path | Who | What |
+| --- | --- | --- |
+| `POST /v1/auth/extension-code` | signed in | one-time code (5 minutes) to connect the extension |
+| `POST /v1/auth/extension-exchange` | anyone | trade the code for the extension's own sign-in |
+| `GET /v1/sessions/{id}/observations?after_seq=` | member | recorded steps, in order |
+| `POST /v1/sessions/{id}/observations` | member+ | record a step; optional `screenshot` as a JPEG or PNG data URL (8 MB max) |
+| `GET /v1/sessions/{id}/observations/{oid}/screenshot` | member | the screenshot |
+| `DELETE /v1/sessions/{id}/observations/{oid}` | member+ | remove a step; it is kept as a record, and audited |
+| `GET /v1/sessions/{id}/events` | member | Server-Sent Events: `observation`, `observation_removed`, `resync` |
+
+Step kinds: `navigate`, `click`, `input`, `select`, `submit`, `note`,
+`capture`. Steps are numbered per session in the order the server receives
+them. A screenshot's bytes must match its declared type, and its SHA-256 is
+stored.
 
 ### Roles
 

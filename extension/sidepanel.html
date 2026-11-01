@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Peter Observer</title>
+    <link rel="stylesheet" href="sidepanel.css" />
+  </head>
+  <body>
+    <header class="top">
+      <img src="icons/icon-32.png" alt="" width="24" height="24" />
+      <strong>Peter Observer</strong>
+    </header>
+
+    <main id="app">
+      <!-- Not connected -->
+      <section id="disconnected" class="card" hidden>
+        <h1>Connect to Peter</h1>
+        <p>Open a session in Peter and choose <b>Connect extension</b>. Your Peter password is never shared with the extension.</p>
+        <button id="open-peter" class="btn primary">Open Peter</button>
+      </section>
+
+      <!-- Connected -->
+      <section id="connected" hidden>
+        <div class="card account">
+          <div>
+            <div id="who" class="strong"></div>
+            <div id="workspace" class="muted"></div>
+          </div>
+          <button id="disconnect" class="btn ghost small">Disconnect</button>
+        </div>
+
+        <div class="card">
+          <label for="session" class="label">Record into session</label>
+          <div class="row">
+            <select id="session"></select>
+            <button id="refresh" class="btn ghost small" title="Reload sessions">↻</button>
+          </div>
+          <p id="no-sessions" class="muted" hidden>No sessions yet. Start one in Peter.</p>
+        </div>
+
+        <div class="card" id="recorder">
+          <div id="state" class="state"></div>
+          <p id="site" class="muted"></p>
+          <label class="check" id="shots-row"><input type="checkbox" id="shots" checked /> Include screenshots</label>
+          <div class="row">
+            <button id="start" class="btn primary">Record this tab</button>
+            <button id="stop" class="btn danger" hidden>Stop</button>
+          </div>
+          <p class="hint">Only this tab is recorded, and only while it stays on this site. Passwords and fields that look secret are hidden in steps and screenshots.</p>
+          <p class="hint" id="shots-hint">Chrome lets extensions take screenshots only with access to all sites, so Chrome will ask for that once. Untick to record steps without screenshots, with access to this site only.</p>
+        </div>
+
+        <div class="card" id="extras" hidden>
+          <label for="note" class="label">Add a note</label>
+          <textarea id="note" rows="2" placeholder="For example: used batch 42 as test data"></textarea>
+          <div class="row">
+            <button id="add-note" class="btn ghost small">Add note</button>
+            <button id="capture" class="btn ghost small">Take screenshot</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="row spread">
+            <span class="label">Recent steps</span>
+            <span id="counts" class="muted small"></span>
+          </div>
+          <ol id="recent" class="recent"></ol>
+        </div>
+      </section>
+
+      <p id="error" class="error" role="alert" hidden></p>
+    </main>
+    <script type="module" src="sidepanel.js"></script>
+  </body>
+</html>

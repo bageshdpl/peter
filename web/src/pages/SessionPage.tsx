@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, atLeast, formatTime, type Project, type ValidationSession, type ValidationType } from "../api";
 import { useSession } from "../App";
+import { ObservationPanel } from "../observe";
 import { messageOf, Notice } from "../ui";
 
 interface Loaded {
@@ -123,11 +124,19 @@ export default function SessionPage() {
         </label>
       </section>
 
+      <ObservationPanel
+        sessionId={session.id}
+        sessionTitle={session.title}
+        userId={me.user.id}
+        workspaceId={me.workspace.id}
+        canRecord={canWrite}
+      />
+
       <section className="card">
         <h2>Steps</h2>
         <p className="muted">
-          Guided steps, observation and AI drafting arrive in the next milestones. For now this shows the path the
-          session will follow.
+          Guided steps and AI drafting arrive in the next milestones. For now this shows the path the session will
+          follow.
         </p>
         <ol className="steps">
           {type?.steps.map((s, i) => (

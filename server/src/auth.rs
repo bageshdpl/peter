@@ -68,19 +68,30 @@ pub struct Tokens {
     pub expires_in: i64,
 }
 
-/// Starts a session for a user in a workspace they belong to.
+/// Starts a web session for a user in a workspace they belong to.
 pub async fn start_session(
     conn: &mut SqliteConnection,
     state: &AppState,
     user_id: &str,
     workspace_id: &str,
 ) -> AppResult<Tokens> {
+    start_client_session(conn, state, user_id, workspace_id, "web").await
+}
+
+/// Starts a session for a particular client (`web` or `extension`).
+pub async fn start_client_session(
+    conn: &mut SqliteConnection,
+    state: &AppState,
+    user_id: &str,
+    workspace_id: &str,
+    client: &str,
+) -> AppResult<Tokens> {
     let (access, refresh) = (new_token(), new_token());
     let t = now();
     sqlx::query(
         "INSERT INTO sessions
-         (id, user_id, workspace_id, access_hash, access_expires_at, refresh_hash, refresh_expires_at, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+         (id, user_id, workspace_id, access_hash, access_expires_at, refresh_hash, refresh_expires_at, created_at, client)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(new_id())
     .bind(user_id)
@@ -90,6 +101,7 @@ pub async fn start_session(
     .bind(hash_token(&refresh))
     .bind(t + state.config.refresh_ttl_secs)
     .bind(t)
+    .bind(client)
     .execute(&mut *conn)
     .await?;
     Ok(Tokens { access_token: access, refresh_token: refresh, expires_in: state.config.access_ttl_secs })

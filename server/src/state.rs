@@ -61,6 +61,15 @@ impl Mailer for ConsoleMailer {
     }
 }
 
+/// Something that happened in a validation session, pushed to open pages.
+#[derive(Debug, Clone)]
+pub struct SessionEvent {
+    pub workspace_id: String,
+    pub session_id: String,
+    pub name: &'static str,
+    pub data: serde_json::Value,
+}
+
 #[derive(Clone)]
 pub struct AppState {
     pub db: SqlitePool,
@@ -69,6 +78,7 @@ pub struct AppState {
     /// A real Argon2 hash, verified against when an email is unknown so that
     /// sign-in takes the same time whether or not the account exists.
     pub dummy_hash: Arc<String>,
+    pub events: tokio::sync::broadcast::Sender<SessionEvent>,
 }
 
 impl AppState {
@@ -87,7 +97,9 @@ impl AppState {
         tokio::fs::create_dir_all(config.data_dir.join("sources")).await?;
         let dummy_hash = crate::security::hash_password("peter-dummy-password")
             .map_err(|_| BoxError::from("could not hash the dummy password"))?;
-        Ok(Self { db, config: Arc::new(config), mailer, dummy_hash: Arc::new(dummy_hash) })
+        tokio::fs::create_dir_all(config.data_dir.join("screenshots")).await?;
+        let (events, _) = tokio::sync::broadcast::channel(512);
+        Ok(Self { db, config: Arc::new(config), mailer, dummy_hash: Arc::new(dummy_hash), events })
     }
 }
 

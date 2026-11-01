@@ -54,7 +54,7 @@ Each module is decided on its own: in, later, or out.
 - Sessions: one validation run in a project, with its validation type.
 - Unfiled sessions, project sources (uploaded files).
 
-### M2. Observer extension
+### M2. Observer extension (done)
 - Side panel: sign in to Peter (a short-lived extension token), pick a session, start and stop recording.
 - Records clicks, typed values, navigation and page titles as steps.
 - Screenshot per step, with sensitive fields masked (passwords always).

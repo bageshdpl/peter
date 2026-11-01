@@ -66,6 +66,25 @@ export interface Source {
   created_at: number;
 }
 
+export type ObservationKind = "navigate" | "click" | "input" | "select" | "submit" | "note" | "capture";
+export interface Observation {
+  id: string;
+  seq: number;
+  kind: ObservationKind;
+  url: string;
+  page_title: string;
+  target_label: string;
+  target_selector: string;
+  value: string;
+  masked: boolean;
+  note: string;
+  has_screenshot: boolean;
+  screenshot_type: string | null;
+  captured_at_ms: number;
+  created_by_name: string;
+  created_at: number;
+}
+
 export class ApiError extends Error {
   constructor(public status: number, public code: string, message: string) {
     super(message);
@@ -169,6 +188,66 @@ export async function uploadFile<T>(path: string, file: File): Promise<T> {
   const form = new FormData();
   form.append("file", file);
   return parse<T>(await authed("POST", path, form));
+}
+
+/** Fetches a protected image and returns an object URL for it. The caller revokes it. */
+export async function fetchBlobUrl(path: string): Promise<string> {
+  const res = await authed("GET", path);
+  if (!res.ok) await parse(res);
+  return URL.createObjectURL(await res.blob());
+}
+
+/**
+ * Follows a Server-Sent Events stream. EventSource cannot send the access
+ * token, so this reads the stream with fetch. Reconnects with a growing pause
+ * until `signal` is aborted; `onOpen` runs on every (re)connection.
+ */
+export async function followEvents(
+  path: string,
+  handlers: { onOpen: () => void; onEvent: (name: string, data: unknown) => void },
+  signal: AbortSignal,
+) {
+  let pause = 1000;
+  while (!signal.aborted) {
+    try {
+      let res = await fetch(path, { headers: { Authorization: `Bearer ${session?.access_token}` }, signal });
+      if (res.status === 401 && (await refresh())) {
+        res = await fetch(path, { headers: { Authorization: `Bearer ${session?.access_token}` }, signal });
+      }
+      if (!res.ok || !res.body) throw new Error(`stream ${res.status}`);
+      pause = 1000;
+      handlers.onOpen();
+      const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+      let buffer = "";
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += value;
+        let end: number;
+        while ((end = buffer.indexOf("\n\n")) >= 0) {
+          const block = buffer.slice(0, end);
+          buffer = buffer.slice(end + 2);
+          let name = "message";
+          const data: string[] = [];
+          for (const line of block.split("\n")) {
+            if (line.startsWith("event:")) name = line.slice(6).trim();
+            else if (line.startsWith("data:")) data.push(line.slice(5).trimStart());
+          }
+          if (data.length) {
+            try {
+              handlers.onEvent(name, JSON.parse(data.join("\n")));
+            } catch {
+              // Ignore a malformed event rather than dropping the stream.
+            }
+          }
+        }
+      }
+    } catch {
+      if (signal.aborted) return;
+    }
+    await new Promise((r) => setTimeout(r, pause));
+    pause = Math.min(pause * 2, 15000);
+  }
 }
 
 /** Downloads with the access token (a plain link cannot send it) and saves the file. */

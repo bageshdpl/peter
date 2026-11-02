@@ -51,13 +51,23 @@ export interface ValidationSession {
   title: string;
   validation_type: string;
   current_step: string | null;
+  baseline_session_id: string | null;
+  baseline_title: string | null;
   created_by_name: string;
   created_at: number;
   updated_at: number;
   archived_at: number | null;
 }
-export interface Step { id: string; label: string; summary: string }
-export interface ValidationType { id: string; title: string; summary: string; available: boolean; steps: Step[] }
+export interface Step { id: string; label: string; summary: string; records: boolean }
+export interface ValidationType {
+  id: string;
+  title: string;
+  summary: string;
+  available: boolean;
+  /** Builds on an earlier validation of the same system. */
+  uses_baseline: boolean;
+  steps: Step[];
+}
 export interface Source {
   id: string;
   filename: string;
@@ -96,6 +106,8 @@ export interface Citations {
   unknown?: string[];
   gaps?: number;
   sources?: Record<string, { id: string; filename: string }>;
+  /** The earlier validation that [B:step] citations point at. */
+  baseline?: { session_id: string; title: string; documents: Record<string, string> };
 }
 export interface DocumentVersion {
   version: number;

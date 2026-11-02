@@ -33,6 +33,7 @@ export default function SessionPage() {
   const [search, setSearch] = useSearchParams();
   const [data, setData] = useState<Loaded | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [earlier, setEarlier] = useState<ValidationSession[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [sharing, setSharing] = useState(false);
@@ -54,6 +55,17 @@ export default function SessionPage() {
     load();
     api<{ projects: Project[] }>("GET", "/v1/projects").then((p) => setProjects(p.projects)).catch(() => {});
   }, [load]);
+
+  // Sessions this one could build on: the same project's, or every session when unfiled.
+  const projectId = data?.session.project_id;
+  const usesBaseline = data?.type?.uses_baseline ?? false;
+  useEffect(() => {
+    if (!usesBaseline) return;
+    const q = projectId ? `project_id=${encodeURIComponent(projectId)}` : "";
+    api<{ sessions: ValidationSession[] }>("GET", `/v1/sessions?${q}`)
+      .then((r) => setEarlier(r.sessions.filter((s) => s.id !== id)))
+      .catch(() => {});
+  }, [usesBaseline, projectId, id]);
 
   // Step and document changes made elsewhere (another person, a finished draft).
   const { subscribe } = events;
@@ -134,7 +146,12 @@ export default function SessionPage() {
           ) : (
             <h1>{session.title}</h1>
           )}
-          <p className="muted small">Started by {session.created_by_name} on {formatTime(session.created_at)}</p>
+          <p className="muted small">
+            Started by {session.created_by_name} on {formatTime(session.created_at)}
+            {session.baseline_session_id && (
+              <> · Builds on <Link to={`/sessions/${session.baseline_session_id}`}>{session.baseline_title}</Link></>
+            )}
+          </p>
         </div>
         <div className="head-actions">
           <label className="field compact">
@@ -147,6 +164,19 @@ export default function SessionPage() {
               )}
             </select>
           </label>
+          {(usesBaseline || session.baseline_session_id) && (
+            <label className="field compact">
+              <span className="field-label">Builds on</span>
+              <select value={session.baseline_session_id ?? ""} disabled={!canWrite}
+                onChange={(e) => save({ baseline_session_id: e.target.value || null })}>
+                <option value="">No earlier validation</option>
+                {earlier.map((s) => <option key={s.id} value={s.id}>{s.title}</option>)}
+                {session.baseline_session_id && !earlier.some((s) => s.id === session.baseline_session_id) && (
+                  <option value={session.baseline_session_id}>{session.baseline_title}</option>
+                )}
+              </select>
+            </label>
+          )}
           {!archived && <button className="btn ghost" onClick={() => setSharing((v) => !v)}>Share</button>}
           {data.documents.some((d) => d.current_version > 0) && (
             <button className="btn ghost" onClick={() => downloadFile(`/v1/sessions/${id}/export`, `${session.title} validation package.zip`).catch((e) => setError(messageOf(e)))}>
@@ -239,7 +269,7 @@ export default function SessionPage() {
               </>
             )}
 
-            {viewing.id === "observe" && (
+            {viewing.records && (
               <ObservationPanel
                 sessionId={session.id}
                 sessionTitle={session.title}

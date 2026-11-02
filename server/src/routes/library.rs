@@ -90,8 +90,10 @@ pub async fn list_templates(State(state): State<AppState>, auth: Auth) -> AppRes
     let steps: Vec<Value> = catalog::TYPES
         .iter()
         .filter(|t| t.available)
-        .flat_map(|t| t.steps.iter())
-        .filter_map(|s| prompts::spec(s.id).map(|spec| json!({ "step_id": s.id, "step": s.label, "document": spec.title })))
+        .flat_map(|t| t.steps.iter().map(move |s| (t, s)))
+        .filter_map(|(t, s)| {
+            prompts::spec(s.id).map(|spec| json!({ "type": t.title, "step_id": s.id, "step": s.label, "document": spec.title }))
+        })
         .collect();
     Ok(Json(json!({ "templates": templates, "steps": steps })))
 }

@@ -1,6 +1,6 @@
 //! Parses the Markdown Peter's documents use into blocks, for Word and Excel
 //! export. Mirrors the web renderer: headings, paragraphs, lists, tables,
-//! quotes, rules; bold, italic, code; citations [O12] [S2] [D:step]; [GAP: ...].
+//! quotes, rules; bold, italic, code; citations [O12] [S2] [D:step] [B:step]; [GAP: ...].
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Inline {
@@ -26,7 +26,7 @@ fn is_cite(s: &str) -> bool {
     let digits = |t: &str| !t.is_empty() && t.chars().all(|c| c.is_ascii_digit());
     s.strip_prefix('O').is_some_and(digits)
         || s.strip_prefix('S').is_some_and(digits)
-        || s.strip_prefix("D:").is_some_and(|t| !t.is_empty() && t.chars().all(|c| c.is_ascii_lowercase() || c == '_'))
+        || ["D:", "B:"].iter().any(|p| s.strip_prefix(p).is_some_and(|t| !t.is_empty() && t.chars().all(|c| c.is_ascii_lowercase() || c == '_')))
 }
 
 pub fn inline(text: &str) -> Vec<Inline> {

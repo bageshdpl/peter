@@ -62,8 +62,9 @@ Each module is decided on its own: in, later, or out.
 - Sends observations to the API; the web app shows them live (SSE).
 - Web app detects whether the extension is installed.
 
-### M3. Guided workflow (done)
-- The validation types and their steps above.
+### M3. Guided workflow (done; every validation type done)
+- The validation types and their steps above, each step with its own drafting prompt.
+- A session can build on an earlier validation of the same project, and cite its documents.
 - Move forward, back, or jump to a step; mark a step reviewed or skipped.
 
 ### M4. AI drafting (done; testing-style preferences done)
@@ -105,7 +106,7 @@ Each module is decided on its own: in, later, or out.
 | M0 Foundation | in |
 | M1 Projects and sessions | in |
 | M2 Observer extension | in (Chrome only) |
-| M3 Guided workflow | in, Initial validation only |
+| M3 Guided workflow | done, every validation type |
 | M4 AI drafting | done, with testing-style preferences |
 | M5 Documents | in, Word export only |
 | M6 Library | later |

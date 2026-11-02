@@ -81,8 +81,7 @@ pub async fn write(State(state): State<AppState>, auth: Auth, Path(session_id): 
     // Check citations the same way as any other version.
     let evidence = drafting::gather(&state, &session_id, "traceability").await.map_err(|_| AppError::internal())?;
     let (cited, unknown, gaps) = drafting::check_citations(&body, &drafting::known_ids(&evidence));
-    let sources = evidence.sources.iter().map(|(tag, r, _)| (tag.clone(), r.clone())).collect();
-    let citations = drafting::citations_json(&sources, &cited, &unknown, gaps);
+    let citations = drafting::citations_json(&evidence, &cited, &unknown, gaps);
 
     let t = now();
     let mut tx = state.db.begin().await?;

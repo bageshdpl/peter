@@ -21,6 +21,7 @@ const MAX_DOCUMENT_CHARS: usize = 8_000;
 const MAX_TEMPLATE_CHARS: usize = 10_000;
 const MAX_CONTROLS: usize = 200;
 const MAX_STYLE_CHARS: usize = 6_000;
+const MAX_ALL_BASELINE_CHARS: usize = 36_000;
 
 #[derive(Debug, Clone, Serialize, serde::Deserialize)]
 pub struct SourceRef {
@@ -44,6 +45,16 @@ pub struct Evidence {
     pub controls: Vec<(String, String)>,
     /// The company's writing style guide, from the Library.
     pub style: Option<String>,
+    /// The earlier validation this session builds on, if one is linked.
+    pub baseline: Option<Baseline>,
+}
+
+/// An earlier session's documents, cited as [B:step].
+pub struct Baseline {
+    pub session_id: String,
+    pub title: String,
+    pub type_title: String,
+    pub documents: Vec<(String, String, String)>, // (step_id, title, body)
 }
 
 pub struct ObservationLine {
@@ -85,8 +96,8 @@ fn describe(o: &ObsRow) -> String {
 
 pub async fn gather(state: &AppState, session_id: &str, step_id: &str) -> Result<Evidence, String> {
     let db_err = |e: sqlx::Error| format!("Could not read the session: {e}");
-    let (title, validation_type, project_id, workspace_id): (String, String, Option<String>, String) =
-        sqlx::query_as("SELECT title, validation_type, project_id, workspace_id FROM validation_sessions WHERE id = ?")
+    let (title, validation_type, project_id, workspace_id, baseline_id): (String, String, Option<String>, String, Option<String>) =
+        sqlx::query_as("SELECT title, validation_type, project_id, workspace_id, baseline_session_id FROM validation_sessions WHERE id = ?")
             .bind(session_id)
             .fetch_one(&state.db)
             .await
@@ -210,6 +221,11 @@ pub async fn gather(state: &AppState, session_id: &str, step_id: &str) -> Result
         .map(|(g,)| g.chars().take(MAX_STYLE_CHARS).collect())
         .filter(|g: &String| !g.trim().is_empty());
 
+    let baseline = match baseline_id {
+        Some(bid) => load_baseline(state, &bid).await.map_err(db_err)?,
+        None => None,
+    };
+
     Ok(Evidence {
         project,
         session_title: title,
@@ -221,7 +237,44 @@ pub async fn gather(state: &AppState, session_id: &str, step_id: &str) -> Result
         template,
         controls,
         style,
+        baseline,
     })
+}
+
+/// The current version of each document in the earlier session, in step order.
+async fn load_baseline(state: &AppState, session_id: &str) -> Result<Option<Baseline>, sqlx::Error> {
+    let row: Option<(String, String)> = sqlx::query_as("SELECT title, validation_type FROM validation_sessions WHERE id = ?")
+        .bind(session_id)
+        .fetch_optional(&state.db)
+        .await?;
+    let Some((title, type_id)) = row else { return Ok(None) };
+    let kind = catalog::find(&type_id);
+    let mut docs: Vec<(String, String, String)> = sqlx::query_as(
+        "SELECT d.step_id, d.title, v.body FROM documents d
+         JOIN document_versions v ON v.document_id = d.id AND v.version = d.current_version
+         WHERE d.session_id = ?",
+    )
+    .bind(session_id)
+    .fetch_all(&state.db)
+    .await?;
+    docs.sort_by_key(|(step, _, _)| kind.and_then(|k| k.steps.iter().position(|s| s.id == step)).unwrap_or(usize::MAX));
+    let mut budget = MAX_ALL_BASELINE_CHARS;
+    let documents = docs
+        .into_iter()
+        .map(|(step, t, body)| {
+            let take = MAX_DOCUMENT_CHARS.min(budget);
+            let cut: String = body.chars().take(take).collect();
+            budget = budget.saturating_sub(cut.chars().count());
+            let body = if cut.chars().count() < body.chars().count() { format!("{cut}\n[... excerpt ends here ...]") } else { cut };
+            (step, t, body)
+        })
+        .collect();
+    Ok(Some(Baseline {
+        session_id: session_id.to_string(),
+        title,
+        type_title: kind.map(|k| k.title).unwrap_or("Validation").to_string(),
+        documents,
+    }))
 }
 
 pub fn user_prompt(evidence: &Evidence, spec: &prompts::DocumentSpec, extra: &str) -> String {
@@ -300,6 +353,20 @@ controls are covered. Controls are not evidence: still cite observed steps, sour
     for (step, title, body) in &evidence.documents {
         p.push_str(&format!("\n### [D:{step}] {title}\n{body}\n"));
     }
+
+    p.push_str("\n## Earlier validation this session builds on\n");
+    match &evidence.baseline {
+        None => p.push_str("None linked.\n"),
+        Some(b) if b.documents.is_empty() => {
+            p.push_str(&format!("{} \"{}\", which has no documents yet.\n", b.type_title, b.title));
+        }
+        Some(b) => {
+            p.push_str(&format!("{} \"{}\". Cite its documents as [B:step].\n", b.type_title, b.title));
+            for (step, title, body) in &b.documents {
+                p.push_str(&format!("\n### [B:{step}] {title}\n{body}\n"));
+            }
+        }
+    }
     p
 }
 
@@ -332,7 +399,12 @@ fn is_citation(s: &str) -> bool {
     let digits = |t: &str| !t.is_empty() && t.chars().all(|c| c.is_ascii_digit());
     s.strip_prefix('O').is_some_and(digits)
         || s.strip_prefix('S').is_some_and(digits)
-        || s.strip_prefix("D:").is_some_and(|t| !t.is_empty() && t.chars().all(|c| c.is_ascii_lowercase() || c == '_'))
+        || s.strip_prefix("D:").is_some_and(step_name)
+        || s.strip_prefix("B:").is_some_and(step_name)
+}
+
+fn step_name(t: &str) -> bool {
+    !t.is_empty() && t.chars().all(|c| c.is_ascii_lowercase() || c == '_')
 }
 
 pub fn known_ids(evidence: &Evidence) -> BTreeSet<String> {
@@ -340,11 +412,22 @@ pub fn known_ids(evidence: &Evidence) -> BTreeSet<String> {
     ids.extend(evidence.observations.iter().map(|o| format!("O{}", o.seq)));
     ids.extend(evidence.sources.iter().map(|(tag, _, _)| tag.clone()));
     ids.extend(evidence.documents.iter().map(|(step, _, _)| format!("D:{step}")));
+    if let Some(b) = &evidence.baseline {
+        ids.extend(b.documents.iter().map(|(step, _, _)| format!("B:{step}")));
+    }
     ids
 }
 
-pub fn citations_json(evidence_sources: &BTreeMap<String, SourceRef>, cited: &[String], unknown: &[String], gaps: usize) -> Value {
-    json!({ "cited": cited, "unknown": unknown, "gaps": gaps, "sources": evidence_sources })
+/// What a version's citations meant when it was saved: the source numbers,
+/// and the earlier validation its [B:step] citations point at.
+pub fn citations_json(evidence: &Evidence, cited: &[String], unknown: &[String], gaps: usize) -> Value {
+    let sources: BTreeMap<String, SourceRef> = evidence.sources.iter().map(|(tag, r, _)| (tag.clone(), r.clone())).collect();
+    let mut v = json!({ "cited": cited, "unknown": unknown, "gaps": gaps, "sources": sources });
+    if let Some(b) = &evidence.baseline {
+        let titles: BTreeMap<&str, &str> = b.documents.iter().map(|(step, t, _)| (step.as_str(), t.as_str())).collect();
+        v["baseline"] = json!({ "session_id": b.session_id, "title": b.title, "documents": titles });
+    }
+    v
 }
 
 /// A draft built from the evidence without AI, for trying Peter without a key.
@@ -377,6 +460,15 @@ Choose an AI provider to draft the real text.\n\n## Evidence available\n\n",
         d.push_str("\n## Earlier documents\n\n");
         for (step, title, _) in &evidence.documents {
             d.push_str(&format!("- {title} [D:{step}]\n"));
+        }
+    }
+    if let Some(b) = &evidence.baseline {
+        d.push_str(&format!("\n## Earlier validation\n\nThis session builds on {} \"{}\".\n\n", b.type_title.to_lowercase(), b.title));
+        if b.documents.is_empty() {
+            d.push_str("It has no documents yet. [GAP: draft the earlier validation's documents, or link another session]\n");
+        }
+        for (step, title, _) in &b.documents {
+            d.push_str(&format!("- {title} [B:{step}]\n"));
         }
     }
     if let Some((name, _)) = &evidence.template {
@@ -493,8 +585,7 @@ async fn draft(state: &AppState, job: &DraftJob) -> Result<(i64, String, Value),
     let body = unwrap_fence(&completion.text);
     let known = known_ids(&evidence);
     let (cited, unknown, gaps) = check_citations(&body, &known);
-    let sources: BTreeMap<String, SourceRef> = evidence.sources.iter().map(|(tag, r, _)| (tag.clone(), r.clone())).collect();
-    let citations = citations_json(&sources, &cited, &unknown, gaps);
+    let citations = citations_json(&evidence, &cited, &unknown, gaps);
 
     let version: i64 = {
         let (current,): (i64,) = sqlx::query_as("SELECT current_version FROM documents WHERE id = ?")
@@ -533,12 +624,13 @@ mod tests {
 
     #[test]
     fn citations_are_sorted_into_known_unknown_and_gaps() {
-        let known: BTreeSet<String> = ["O1", "O2", "S1", "D:requirements"].iter().map(|s| s.to_string()).collect();
+        let known: BTreeSet<String> = ["O1", "O2", "S1", "D:requirements", "B:testing"].iter().map(|s| s.to_string()).collect();
         let body = "Users sign in [O1][O2]. Per manual [S1] and [D:requirements]. Made up [O99] [S7]. \
-                    Backups [GAP: no backup SOP]. A [link](x) and [not a citation] and [GAP: second].";
+                    Backups [GAP: no backup SOP]. A [link](x) and [not a citation] and [GAP: second]. \
+                    Baseline tests [B:testing], missing [B:plan].";
         let (cited, unknown, gaps) = check_citations(body, &known);
-        assert_eq!(cited, ["D:requirements", "O1", "O2", "S1"]);
-        assert_eq!(unknown, ["O99", "S7"]);
+        assert_eq!(cited, ["B:testing", "D:requirements", "O1", "O2", "S1"]);
+        assert_eq!(unknown, ["B:plan", "O99", "S7"]);
         assert_eq!(gaps, 2);
     }
 

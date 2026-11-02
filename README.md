@@ -138,6 +138,39 @@ How drafting works:
 
 Every export is recorded in the audit trail.
 
+## Validation types
+
+Pick the kind of work when starting a session. Each kind has its own steps,
+and each step drafts its own document. The Observer recorder appears on the
+steps where you exercise the system (marked ● below).
+
+| Type | Steps |
+| --- | --- |
+| Initial validation | ● Observe, System assessment, Requirements and risk, Functional and design spec, Configuration spec, Validation plan, IQ, Testing, Traceability matrix, Summary report |
+| Change validation | ● Describe the change, Baseline documents, Impact assessment, ● Test scope and results, Document updates, Change summary |
+| Periodic review | Changes and incidents, ● Controls check, Review report |
+| Data migration | Migration plan, Data mapping, Verification plan, ● Migration report |
+| Retirement | Retirement plan, Archive plan, ● Decommissioning, Retirement report |
+| AI validation | ● Intended use, Context and risk, Data and model, Acceptance criteria, ● Performance testing, Monitoring |
+| Equipment | ● Assessment (USP <1058> group A, B or C), Requirements, IQ, ● OQ, ● PQ, Qualification report |
+| Dashboards and reports | ● Use assessment, Report specification, ● Verification, Verification report |
+| Procedures | Procedure list, Administration SOP, Backup and recovery SOP, Training plan, ● Work instructions |
+
+Skip the steps that do not apply; for example, group A equipment needs only
+its assessment.
+
+**Building on an earlier validation.** Change validation, periodic review and
+retirement start by asking which earlier session of the same project they
+build on (you can change it later under **Builds on** on the session page).
+Drafts then see that session's current documents and cite them as
+`[B:requirements]`, `[B:testing]` and so on; on the page these link to the
+earlier session, and in Word and PDF exports they read "see User requirements
+in "LIMS initial validation"". Without a link, add the approved documents as
+project files instead. Any session type can have a baseline through the API.
+
+The traceability matrix and controls coverage below belong to Initial
+validation's Traceability step.
+
 ## Traceability
 
 On the **Traceability matrix** step, Peter shows a live matrix read from the
@@ -357,16 +390,16 @@ login, refresh, accept-invite and password reset. Errors look like
 | `GET /v1/projects/{id}/sources/{source_id}/file` | member | download |
 | `DELETE /v1/projects/{id}/sources/{source_id}` | member+ | hide from the project; the stored copy is kept |
 | `GET /v1/sessions?project_id=&unfiled=&archived=` | member | sessions |
-| `POST /v1/sessions` | member+ | start: `title`, `validation_type`, optional `project_id` |
+| `POST /v1/sessions` | member+ | start: `title`, `validation_type`, optional `project_id` and `baseline_session_id` |
 | `GET /v1/sessions/{id}` | member | the session with its type and steps |
-| `PATCH /v1/sessions/{id}` | member+ | `title`; `project_id` moves it (`null` unfiles it) |
+| `PATCH /v1/sessions/{id}` | member+ | `title`; `project_id` moves it (`null` unfiles it); `baseline_session_id` sets or clears the earlier validation |
 | `POST /v1/sessions/{id}/archive`, `/restore` | member+ | archived sessions are read-only |
 
 "member" means any role including viewer; "member+" excludes viewers.
 Uploads accept PDF, Word (.docx), Excel (.xlsx), CSV, text, Markdown, PNG and
 JPEG. The file type comes from the extension, and each file's SHA-256 is
-recorded. Only Initial validation can be started so far; the other types are
-listed with their steps and marked unavailable.
+recorded. Every validation type can be started; see
+[Validation types](#validation-types).
 
 ## API (M2)
 

@@ -26,6 +26,8 @@ pub struct SessionView {
     title: String,
     validation_type: String,
     current_step: Option<String>,
+    baseline_session_id: Option<String>,
+    baseline_title: Option<String>,
     created_by_name: String,
     created_at: i64,
     updated_at: i64,
@@ -34,10 +36,12 @@ pub struct SessionView {
 
 const SESSION_SELECT: &str = "
     SELECT s.id, s.project_id, p.name AS project_name, s.title, s.validation_type, s.current_step,
+           s.baseline_session_id, b.title AS baseline_title,
            u.name AS created_by_name, s.created_at, s.updated_at, s.archived_at
     FROM validation_sessions s
     JOIN users u ON u.id = s.created_by
-    LEFT JOIN projects p ON p.id = s.project_id";
+    LEFT JOIN projects p ON p.id = s.project_id
+    LEFT JOIN validation_sessions b ON b.id = s.baseline_session_id";
 
 pub async fn types() -> Json<Value> {
     Json(json!({ "types": catalog::TYPES }))
@@ -121,6 +125,35 @@ pub struct CreateBody {
     title: String,
     validation_type: String,
     project_id: Option<String>,
+    /// An earlier session of the same system that this one builds on.
+    baseline_session_id: Option<String>,
+}
+
+/// Checks that a session can serve as the baseline of another: same
+/// workspace, not the session itself, and the same project when both are filed.
+async fn check_baseline(
+    conn: &mut sqlx::SqliteConnection,
+    workspace_id: &str,
+    session_id: Option<&str>,
+    project_id: Option<&str>,
+    baseline_id: &str,
+) -> AppResult<()> {
+    if Some(baseline_id) == session_id {
+        return Err(AppError::bad_request("invalid_baseline", "A session cannot build on itself."));
+    }
+    let row: Option<(Option<String>,)> =
+        sqlx::query_as("SELECT project_id FROM validation_sessions WHERE id = ? AND workspace_id = ?")
+            .bind(baseline_id)
+            .bind(workspace_id)
+            .fetch_optional(&mut *conn)
+            .await?;
+    let (baseline_project,) = row.ok_or_else(|| AppError::bad_request("invalid_baseline", "That earlier session does not exist."))?;
+    if let (Some(p), Some(b)) = (project_id, baseline_project.as_deref())
+        && p != b
+    {
+        return Err(AppError::bad_request("invalid_baseline", "The earlier validation must belong to the same project."));
+    }
+    Ok(())
 }
 
 pub async fn create(
@@ -142,11 +175,14 @@ pub async fn create(
     {
         return Err(AppError::conflict("archived", "Restore this project before adding sessions to it."));
     }
+    if let Some(baseline) = &body.baseline_session_id {
+        check_baseline(&mut tx, &auth.workspace_id, None, body.project_id.as_deref(), baseline).await?;
+    }
     let (id, t) = (new_id(), now());
     sqlx::query(
         "INSERT INTO validation_sessions
-         (id, workspace_id, project_id, title, validation_type, current_step, created_by, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+         (id, workspace_id, project_id, title, validation_type, current_step, baseline_session_id, created_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(&id)
     .bind(&auth.workspace_id)
@@ -154,6 +190,7 @@ pub async fn create(
     .bind(&title)
     .bind(kind.id)
     .bind(kind.steps.first().map(|s| s.id))
+    .bind(&body.baseline_session_id)
     .bind(&auth.user_id)
     .bind(t)
     .bind(t)
@@ -163,18 +200,22 @@ pub async fn create(
         sqlx::query("UPDATE projects SET updated_at = ? WHERE id = ?").bind(t).bind(project_id).execute(&mut *tx).await?;
     }
     audit(&mut tx, Some(&auth.workspace_id), Some(&auth.user_id), "session.created", Some(&id),
-        json!({ "title": title, "validation_type": kind.id, "project_id": body.project_id })).await?;
+        json!({ "title": title, "validation_type": kind.id, "project_id": body.project_id,
+                "baseline_session_id": body.baseline_session_id })).await?;
     tx.commit().await?;
     let Json(view) = get(State(state), auth, Path(id)).await?;
     Ok((StatusCode::CREATED, Json(view)))
 }
 
 /// `project_id` moves the session: a project id files it there, `null` unfiles it.
+/// `baseline_session_id` likewise sets or clears the earlier validation.
 #[derive(Deserialize)]
 pub struct UpdateBody {
     title: Option<String>,
     #[serde(default, deserialize_with = "present")]
     project_id: Option<Option<String>>,
+    #[serde(default, deserialize_with = "present")]
+    baseline_session_id: Option<Option<String>>,
 }
 
 /// Distinguishes a field set to `null` from a field left out.
@@ -195,6 +236,7 @@ pub async fn update(
     }
     let title = match &body.title { Some(v) => clean_text(v, "session title", 160, true)?, None => current.title.clone() };
     let project_id = body.project_id.clone().unwrap_or(current.project_id.clone());
+    let baseline = body.baseline_session_id.clone().unwrap_or(current.baseline_session_id.clone());
 
     let mut tx = state.db.begin().await?;
     if let Some(pid) = &project_id
@@ -203,6 +245,11 @@ pub async fn update(
     {
         return Err(AppError::conflict("archived", "That project is archived."));
     }
+    if let Some(b) = &baseline
+        && (Some(b) != current.baseline_session_id.as_ref() || project_id != current.project_id)
+    {
+        check_baseline(&mut tx, &auth.workspace_id, Some(&id), project_id.as_deref(), b).await?;
+    }
     let mut changes = serde_json::Map::new();
     if title != current.title {
         changes.insert("title".into(), json!({ "from": current.title, "to": title }));
@@ -210,11 +257,15 @@ pub async fn update(
     if project_id != current.project_id {
         changes.insert("project_id".into(), json!({ "from": current.project_id, "to": project_id }));
     }
+    if baseline != current.baseline_session_id {
+        changes.insert("baseline_session_id".into(), json!({ "from": current.baseline_session_id, "to": baseline }));
+    }
     if !changes.is_empty() {
         let t = now();
-        sqlx::query("UPDATE validation_sessions SET title = ?, project_id = ?, updated_at = ? WHERE id = ?")
+        sqlx::query("UPDATE validation_sessions SET title = ?, project_id = ?, baseline_session_id = ?, updated_at = ? WHERE id = ?")
             .bind(&title)
             .bind(&project_id)
+            .bind(&baseline)
             .bind(t)
             .bind(&id)
             .execute(&mut *tx)

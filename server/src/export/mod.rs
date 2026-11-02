@@ -94,6 +94,44 @@ fn step_code(step_id: &str) -> String {
         "testing" => "TS".into(),
         "traceability" => "TM".into(),
         "summary" => "VSR".into(),
+        "change_description" => "CR".into(),
+        "baseline" => "BL".into(),
+        "impact" => "IA".into(),
+        "test_scope" => "CT".into(),
+        "document_updates" => "DU".into(),
+        "change_summary" => "CSR".into(),
+        "history" => "PRH".into(),
+        "controls" => "PRC".into(),
+        "review_report" => "PRR".into(),
+        "migration_plan" => "DMP".into(),
+        "mapping" => "DMS".into(),
+        "verification_plan" => "DMV".into(),
+        "migration_report" => "DMR".into(),
+        "retirement_plan" => "RP".into(),
+        "archive_plan" => "AP".into(),
+        "decommission" => "DC".into(),
+        "retirement_report" => "RR".into(),
+        "ai_use" => "AIU".into(),
+        "ai_risk" => "AIRA".into(),
+        "ai_data" => "AID".into(),
+        "ai_acceptance" => "AIAC".into(),
+        "ai_testing" => "AIT".into(),
+        "ai_monitoring" => "AIM".into(),
+        "equipment_assessment" => "EA".into(),
+        "equipment_requirements" => "EURS".into(),
+        "equipment_iq" => "EIQ".into(),
+        "equipment_oq" => "EOQ".into(),
+        "equipment_pq" => "EPQ".into(),
+        "equipment_report" => "EQR".into(),
+        "report_use" => "RUA".into(),
+        "report_requirements" => "RS".into(),
+        "report_verification" => "RV".into(),
+        "report_summary" => "RVR".into(),
+        "procedure_list" => "SOPL".into(),
+        "administration" => "SOP-ADM".into(),
+        "backup" => "SOP-BR".into(),
+        "training" => "TRP".into(),
+        "work_instructions" => "WI".into(),
         other => other.to_uppercase().replace('_', "-"),
     }
 }
@@ -343,7 +381,14 @@ pub async fn load(
         }
     }
 
-    let document_titles = kind.steps.iter().map(|s| (s.id.to_string(), s.label.to_string())).collect();
+    let mut document_titles: BTreeMap<String, String> = kind.steps.iter().map(|s| (s.id.to_string(), s.label.to_string())).collect();
+    // [B:step] citations point at the earlier validation this version was written against.
+    if let Some(docs) = citations["baseline"]["documents"].as_object() {
+        let session = citations["baseline"]["title"].as_str().unwrap_or("earlier validation");
+        for (step, title) in docs {
+            document_titles.insert(format!("B:{step}"), format!("{} in \"{session}\"", title.as_str().unwrap_or(step)));
+        }
+    }
     let history = sqlx::query_as::<_, (i64, String, Option<String>, Option<String>, String, i64)>(
         "SELECT v.version, v.origin, v.provider, v.model, u.name, v.created_at
          FROM document_versions v JOIN users u ON u.id = v.created_by WHERE v.document_id = ? AND v.version <= ? ORDER BY v.version",

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { api, downloadFile, formatTime, type DocumentVersion, type DocumentView, type Provider, type Step } from "./api";
 import type { SessionEvents } from "./events";
 import { Markdown } from "./markdown";
@@ -164,6 +165,16 @@ export function DocumentPanel(props: {
       );
     }
     const target = id.slice(2);
+    if (id.startsWith("B:")) {
+      const b = version?.citations.baseline;
+      const label = b?.documents[target] ?? target;
+      return (
+        <Link key={key} className="cite cite-b" title={b ? `${label} in the earlier validation "${b.title}"` : "Earlier validation"}
+          to={b ? `/sessions/${b.session_id}?step=${target}` : "#"}>
+          {label} (earlier)
+        </Link>
+      );
+    }
     return (
       <button key={key} className="cite cite-d" title={stepTitle(target)} onClick={() => onGoToStep(target)}>
         {stepTitle(target)}
@@ -176,6 +187,7 @@ export function DocumentPanel(props: {
     steps: cit?.cited?.filter((c) => c.startsWith("O")).length ?? 0,
     files: cit?.cited?.filter((c) => c.startsWith("S")).length ?? 0,
     docs: cit?.cited?.filter((c) => c.startsWith("D:")).length ?? 0,
+    baseline: cit?.cited?.filter((c) => c.startsWith("B:")).length ?? 0,
   };
 
   return (
@@ -261,8 +273,9 @@ export function DocumentPanel(props: {
       {editing !== null ? (
         <div className="editor">
           <p className="muted small">
-            Markdown. Cite evidence as [O12] (observed step), [S2] (source file) or [D:requirements] (earlier
-            document). Mark missing evidence as [GAP: what is missing].
+            Markdown. Cite evidence as [O12] (observed step), [S2] (source file), [D:requirements] (earlier
+            document) or [B:testing] (a document from the earlier validation this session builds on). Mark missing
+            evidence as [GAP: what is missing].
           </p>
           <textarea value={editing} onChange={(e) => setEditing(e.target.value)} rows={24} aria-label="Document text" />
           <div className="form-actions">
@@ -273,7 +286,8 @@ export function DocumentPanel(props: {
       ) : version ? (
         <>
           <div className="cite-summary">
-            <span>Cites {counts.steps} observed {counts.steps === 1 ? "step" : "steps"}, {counts.files} {counts.files === 1 ? "file" : "files"}, {counts.docs} earlier {counts.docs === 1 ? "document" : "documents"}.</span>
+            <span>Cites {counts.steps} observed {counts.steps === 1 ? "step" : "steps"}, {counts.files} {counts.files === 1 ? "file" : "files"}, {counts.docs} earlier {counts.docs === 1 ? "document" : "documents"}
+              {counts.baseline > 0 && <>, {counts.baseline} from the earlier validation</>}.</span>
             {(cit?.gaps ?? 0) > 0 && <span className="warn">{cit!.gaps} {cit!.gaps === 1 ? "gap" : "gaps"} need evidence.</span>}
             {(cit?.unknown?.length ?? 0) > 0 && (
               <span className="bad">Cites evidence that does not exist: {cit!.unknown!.join(", ")}. Check those statements.</span>

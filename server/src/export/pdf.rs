@@ -679,6 +679,7 @@ fn inline_spans(doc: &ExportDoc, inlines: &[Inline], base: Style, out: &mut Vec<
             Inline::Cite(id) => {
                 let label = match id.strip_prefix("D:") {
                     Some(step) => format!("[see {}]", doc.document_titles.get(step).map(String::as_str).unwrap_or(step)),
+                    None if id.starts_with("B:") => format!("[see {}]", doc.document_titles.get(id).map(String::as_str).unwrap_or(id)),
                     None => format!("[{id}]"),
                 };
                 out.push(span(label, Style { face: FaceId::Regular, size: base.size * 0.85, color: ACCENT, highlight: None }));

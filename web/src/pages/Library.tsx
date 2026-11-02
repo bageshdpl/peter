@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { api, atLeast, fetchBlobUrl, formatTime, uploadFile } from "../api";
 import { useSession } from "../App";
 import { WritingStyle } from "../style";
@@ -101,7 +101,7 @@ function Regulations({ canEdit }: { canEdit: boolean }) {
 interface Template { id: string; step_id: string; name: string; filename: string; chars: number; created_by_name: string; created_at: number }
 
 function Templates({ canEdit }: { canEdit: boolean }) {
-  const [data, setData] = useState<{ templates: Template[]; steps: { step_id: string; step: string; document: string }[] } | null>(null);
+  const [data, setData] = useState<{ templates: Template[]; steps: { type: string; step_id: string; step: string; document: string }[] } | null>(null);
   const [preview, setPreview] = useState<{ name: string; text: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const load = useCallback(async () => {
@@ -134,10 +134,15 @@ function Templates({ canEdit }: { canEdit: boolean }) {
             </tr>
           </thead>
           <tbody>
-            {data.steps.map((s) => {
+            {data.steps.map((s, i) => {
               const t = data.templates.find((x) => x.step_id === s.step_id);
+              const group = i === 0 || data.steps[i - 1].type !== s.type;
               return (
-                <tr key={s.step_id}>
+                <Fragment key={s.step_id}>
+                {group && (
+                  <tr className="group-row"><th colSpan={3} scope="colgroup">{s.type}</th></tr>
+                )}
+                <tr>
                   <td>
                     <strong>{s.document}</strong>
                     <div className="muted small">Step: {s.step}</div>
@@ -163,6 +168,7 @@ function Templates({ canEdit }: { canEdit: boolean }) {
                     )}
                   </td>
                 </tr>
+                </Fragment>
               );
             })}
           </tbody>

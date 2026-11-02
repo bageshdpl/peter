@@ -22,7 +22,19 @@ export function NewSessionForm({ projectId, onCancel }: { projectId: string | nu
   const types = useValidationTypes();
   const [title, setTitle] = useState("");
   const [type, setType] = useState("initial");
+  const [baseline, setBaseline] = useState("");
+  const [earlier, setEarlier] = useState<ValidationSession[] | null>(null);
   const { busy, error, run } = useAction();
+  const chosen = types?.find((t) => t.id === type);
+
+  // Earlier sessions of the same project (or the whole workspace when unfiled) a session can build on.
+  useEffect(() => {
+    if (!chosen?.uses_baseline || earlier) return;
+    const q = projectId ? `project_id=${encodeURIComponent(projectId)}` : "";
+    api<{ sessions: ValidationSession[] }>("GET", `/v1/sessions?${q}`)
+      .then((r) => setEarlier(r.sessions))
+      .catch(() => setEarlier([]));
+  }, [chosen?.uses_baseline, earlier, projectId]);
 
   return (
     <form
@@ -34,6 +46,7 @@ export function NewSessionForm({ projectId, onCancel }: { projectId: string | nu
             title,
             validation_type: type,
             project_id: projectId,
+            baseline_session_id: chosen?.uses_baseline && baseline ? baseline : null,
           });
           navigate(`/sessions/${res.session.id}`);
         });
@@ -57,6 +70,18 @@ export function NewSessionForm({ projectId, onCancel }: { projectId: string | nu
           </label>
         ))}
       </fieldset>
+      {chosen?.uses_baseline && (
+        <label className="field">
+          <span className="field-label">Earlier validation it builds on</span>
+          <select value={baseline} onChange={(e) => setBaseline(e.target.value)}>
+            <option value="">None (add its approved documents as project files instead)</option>
+            {earlier?.map((s) => (
+              <option key={s.id} value={s.id}>{s.title} · {types?.find((t) => t.id === s.validation_type)?.title ?? s.validation_type}</option>
+            ))}
+          </select>
+          <span className="muted small">Drafts can then cite that session's documents, for example its requirements and tests.</span>
+        </label>
+      )}
       <div className="form-actions">
         <button type="button" className="btn ghost" onClick={onCancel}>Cancel</button>
         <button className="btn primary" disabled={busy}>Start session</button>

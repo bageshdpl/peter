@@ -1,7 +1,7 @@
 // A small Markdown renderer for drafted documents. It builds React elements
 // (never raw HTML), so text from an AI cannot inject markup or scripts.
 // Supports headings, paragraphs, lists, tables, quotes, bold, italic, code,
-// and Peter's evidence citations: [O12], [S2], [D:step] and [GAP: ...].
+// and Peter's evidence citations: [O12], [S2], [D:step], [B:step] and [GAP: ...].
 
 import type { ReactNode } from "react";
 
@@ -10,7 +10,7 @@ export interface CitationHandlers {
   chip: (id: string, key: string) => ReactNode;
 }
 
-const CITATION = /\[(O\d+|S\d+|D:[a-z_]+)\]/y;
+const CITATION = /\[(O\d+|S\d+|[DB]:[a-z_]+)\]/y;
 const GAP = /\[GAP:\s*([^\]]*)\]/y;
 
 function inline(text: string, h: CitationHandlers, keyBase: string): ReactNode[] {

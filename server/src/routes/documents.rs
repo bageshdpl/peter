@@ -444,8 +444,10 @@ pub async fn save(
         .fetch_optional(&mut *tx)
         .await?;
     let base: Value = base.and_then(|(c,)| serde_json::from_str(&c).ok()).unwrap_or_else(|| json!({}));
-    let sources = serde_json::from_value(base["sources"].clone()).unwrap_or_default();
-    let citations = drafting::citations_json(&sources, &cited, &unknown, gaps);
+    let mut citations = drafting::citations_json(&evidence, &cited, &unknown, gaps);
+    if base["sources"].is_object() {
+        citations["sources"] = base["sources"].clone();
+    }
 
     let version = current + 1;
     sqlx::query(

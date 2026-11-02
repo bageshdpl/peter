@@ -352,6 +352,7 @@ textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 .cite-o { background: var(--accent-soft); color: var(--accent); }
 .cite-s { background: #eef4ff; color: #3538cd; }
 .cite-d { background: var(--surface-2); color: var(--text); border-color: var(--border); font-weight: 600; }
+.cite-b { background: var(--surface-2); color: var(--text); border-color: var(--border); border-style: dashed; font-weight: 600; text-decoration: none; }
 .cite.missing { background: var(--danger-soft); color: var(--danger); cursor: help; text-decoration: line-through; }
 .gap { background: #fef0c7; color: #93370d; border-radius: 4px; padding: 0.05rem 0.35rem; font-size: 0.88em; font-weight: 550; }
 @media (prefers-color-scheme: dark) {
@@ -509,3 +510,4 @@ h3.sub { font-size: 0.95rem; margin: 1.1rem 0 0.4rem; }
 /* Writing style */
 .style-guide { background: var(--surface-2); border-radius: 8px; padding: 0.25rem 1rem; }
 .style-guide h2 { font-size: 1rem; }
+.group-row th { background: var(--surface-2); text-transform: none; letter-spacing: 0; font-size: 0.85rem; color: var(--text); }

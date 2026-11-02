@@ -121,7 +121,7 @@ fn leading_id(cell: &str, prefixes: &[&str]) -> Option<String> {
 fn cites(inlines: &[Inline], out: &mut BTreeSet<String>) {
     for i in inlines {
         match i {
-            Inline::Cite(id) if !id.starts_with("D:") => {
+            Inline::Cite(id) if !id.starts_with("D:") && !id.starts_with("B:") => {
                 out.insert(id.clone());
             }
             Inline::Bold(c) | Inline::Italic(c) => cites(c, out),

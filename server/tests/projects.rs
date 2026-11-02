@@ -27,7 +27,11 @@ async fn validation_types_catalog() {
     let initial = types.iter().find(|t| t["id"] == "initial").unwrap();
     assert_eq!(initial["available"], true);
     assert_eq!(initial["steps"].as_array().unwrap().len(), 10);
-    assert!(types.iter().filter(|t| t["id"] != "initial").all(|t| t["available"] == false));
+    assert!(types.iter().all(|t| t["available"] == true));
+    assert_eq!(initial["steps"][0]["records"], true);
+    let change = types.iter().find(|t| t["id"] == "change").unwrap();
+    assert_eq!(change["uses_baseline"], true);
+    assert_eq!(initial["uses_baseline"], false);
 }
 
 #[tokio::test]
@@ -111,9 +115,7 @@ async fn sessions_create_file_move_archive() {
     assert_eq!(created["type"]["id"], "initial");
     let sid = created["session"]["id"].as_str().unwrap().to_string();
 
-    // Unavailable and unknown types are refused.
-    let (s, b) = api.call("POST", "/v1/sessions", Some(&t), Some(json!({ "title": "x", "validation_type": "change" }))).await;
-    assert_eq!((s, b["error"]["code"].as_str()), (StatusCode::BAD_REQUEST, Some("type_unavailable")));
+    // Unknown types are refused.
     let (s, _) = api.call("POST", "/v1/sessions", Some(&t), Some(json!({ "title": "x", "validation_type": "nope" }))).await;
     assert_eq!(s, StatusCode::BAD_REQUEST);
 
@@ -209,4 +211,49 @@ async fn sources_upload_download_remove() {
     let (_, audit) = api.call("GET", "/v1/audit", Some(&t), None).await;
     let acts = actions(&audit);
     assert!(acts.contains(&"source.uploaded".to_string()) && acts.contains(&"source.removed".to_string()));
+}
+
+#[tokio::test]
+async fn sessions_build_on_an_earlier_validation() {
+    let api = Api::new().await;
+    let t = token(&api.signup("ana@example.com", "Acme").await);
+    let lims = project(&api, &t, "LIMS").await;
+    let mes = project(&api, &t, "MES").await;
+    let (_, iv) = api.call("POST", "/v1/sessions", Some(&t),
+        Some(json!({ "title": "LIMS IV", "validation_type": "initial", "project_id": lims }))).await;
+    let iv = iv["session"]["id"].as_str().unwrap().to_string();
+    let (_, other) = api.call("POST", "/v1/sessions", Some(&t),
+        Some(json!({ "title": "MES IV", "validation_type": "initial", "project_id": mes }))).await;
+    let other = other["session"]["id"].as_str().unwrap().to_string();
+
+    let (s, change) = api.call("POST", "/v1/sessions", Some(&t), Some(json!({
+        "title": "LIMS 8.3 upgrade", "validation_type": "change", "project_id": lims, "baseline_session_id": iv }))).await;
+    assert_eq!(s, StatusCode::CREATED, "{change}");
+    assert_eq!(change["session"]["current_step"], "change_description");
+    assert_eq!(change["session"]["baseline_title"], "LIMS IV");
+    let cid = change["session"]["id"].as_str().unwrap().to_string();
+
+    // Another project's session, an unknown one, or itself is refused.
+    let (s, b) = api.call("POST", "/v1/sessions", Some(&t), Some(json!({
+        "title": "x", "validation_type": "periodic_review", "project_id": lims, "baseline_session_id": other }))).await;
+    assert_eq!((s, b["error"]["code"].as_str()), (StatusCode::BAD_REQUEST, Some("invalid_baseline")));
+    let (s, _) = api.call("POST", "/v1/sessions", Some(&t), Some(json!({
+        "title": "x", "validation_type": "retirement", "baseline_session_id": "nope" }))).await;
+    assert_eq!(s, StatusCode::BAD_REQUEST);
+    let path = format!("/v1/sessions/{cid}");
+    let (s, _) = api.call("PATCH", &path, Some(&t), Some(json!({ "baseline_session_id": cid }))).await;
+    assert_eq!(s, StatusCode::BAD_REQUEST);
+    // Moving to another project while keeping a baseline from this one is refused.
+    let (s, _) = api.call("PATCH", &path, Some(&t), Some(json!({ "project_id": mes }))).await;
+    assert_eq!(s, StatusCode::BAD_REQUEST);
+
+    // Clearing it, and leaving it out keeps it.
+    let (_, kept) = api.call("PATCH", &path, Some(&t), Some(json!({ "title": "LIMS 8.3" }))).await;
+    assert_eq!(kept["session"]["baseline_session_id"], iv.as_str());
+    let (s, cleared) = api.call("PATCH", &path, Some(&t), Some(json!({ "baseline_session_id": null }))).await;
+    assert_eq!(s, StatusCode::OK);
+    assert!(cleared["session"]["baseline_session_id"].is_null());
+    let (_, audit) = api.call("GET", "/v1/audit?limit=1", Some(&t), None).await;
+    assert_eq!(audit["events"][0]["action"], "session.updated");
+    assert!(audit["events"][0]["detail"]["baseline_session_id"].is_object(), "{audit}");
 }

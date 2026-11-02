@@ -101,6 +101,7 @@ impl<'a> Writer<'a> {
                 Inline::Cite(id) => {
                     let label = match id.strip_prefix("D:") {
                         Some(step) => format!("[see {}]", self.doc.document_titles.get(step).map(String::as_str).unwrap_or(step)),
+                        None if id.starts_with("B:") => format!("[see {}]", self.doc.document_titles.get(id).map(String::as_str).unwrap_or(id)),
                         None => format!("[{id}]"),
                     };
                     out.push_str(&run(&label, Fmt::default(), &format!(r#"<w:color w:val="{ACCENT}"/><w:sz w:val="17"/>"#)));

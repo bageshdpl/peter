@@ -297,3 +297,60 @@ async fn documents_respect_workspaces_and_archiving() {
         Some(json!({ "provider": "sample" }))).await;
     assert_eq!(s, StatusCode::CONFLICT);
 }
+
+#[tokio::test]
+async fn change_validation_drafts_cite_the_earlier_validation() {
+    let seen = Seen::default();
+    let router = Router::new()
+        .route("/chat/completions", post(|State(seen): State<Seen>, headers: HeaderMap, Json(body): Json<Value>| async move {
+            seen.0.lock().unwrap().push((headers, "/chat/completions".into(), body));
+            Json(json!({
+                "model": "test/model-1",
+                "choices": [{ "message": { "role": "assistant",
+                    "content": "# Impact assessment\n\nThe login screen changes [O1]; baseline test [B:observe]. Unknown [B:testing]." } }],
+                "usage": { "prompt_tokens": 10, "completion_tokens": 5 }
+            }))
+        }))
+        .with_state(seen.clone());
+    let base = fake_provider(router).await;
+    let api = api_with(|c| {
+        c.ai.openrouter_key = Some("or-test-key".into());
+        c.ai.openrouter_base = base.clone();
+        c.ai.openrouter_model = "test/model-1".into();
+    })
+    .await;
+    let (t, iv) = session_with_evidence(&api).await;
+    draft(&api, &t, &iv, "observe", "sample").await;
+    let (_, ivs) = api.call("GET", &format!("/v1/sessions/{iv}"), Some(&t), None).await;
+    let pid = ivs["session"]["project_id"].as_str().unwrap();
+
+    let (s, c) = api.call("POST", "/v1/sessions", Some(&t), Some(json!({
+        "title": "LIMS 8.3", "validation_type": "change", "project_id": pid, "baseline_session_id": iv }))).await;
+    assert_eq!(s, StatusCode::CREATED, "{c}");
+    let cid = c["session"]["id"].as_str().unwrap().to_string();
+    let (s, _) = api.call("POST", &format!("/v1/sessions/{cid}/observations"), Some(&t),
+        Some(json!({ "kind": "navigate", "url": "https://lims/login", "page_title": "Login" }))).await;
+    assert_eq!(s, StatusCode::CREATED);
+
+    // A sample draft lists the earlier validation's documents.
+    let doc = draft(&api, &t, &cid, "baseline", "sample").await;
+    let body = doc["current"]["body"].as_str().unwrap();
+    assert!(body.contains("[B:observe]"), "{body}");
+    assert_eq!(doc["current"]["citations"]["unknown"], json!([]));
+    assert_eq!(doc["current"]["citations"]["baseline"]["title"], "LIMS IV");
+
+    let doc = draft(&api, &t, &cid, "impact", "openrouter").await;
+    assert_eq!(doc["title"], "Impact assessment");
+    assert_eq!(doc["current"]["citations"]["cited"], json!(["B:observe", "O1"]));
+    assert_eq!(doc["current"]["citations"]["unknown"], json!(["B:testing"]));
+    let user = seen.0.lock().unwrap()[0].2["messages"][1]["content"].as_str().unwrap().to_string();
+    assert!(user.contains("Write the Impact assessment for this change validation"));
+    assert!(user.contains("## Earlier validation this session builds on\nInitial validation \"LIMS IV\""), "{user}");
+    assert!(user.contains("### [B:observe] Observation summary"));
+    assert!(user.contains("### [D:baseline] Baseline documents"));
+
+    // The Word export handles [B:step] citations.
+    let (s, _, bytes) = api.raw_get(&format!("/v1/sessions/{cid}/documents/impact/export/docx"), &t).await;
+    assert_eq!(s, StatusCode::OK);
+    assert!(bytes.starts_with(b"PK"));
+}

@@ -17,6 +17,8 @@ export interface Session {
   workspaces: Workspace[];
   /** The workspace requires two-factor sign-in and this person has not set it up. */
   mfa_setup_required?: boolean;
+  /** Signed in through the workspace's identity provider. */
+  sso?: boolean;
 }
 export interface Member { user_id: string; email: string; name: string; role: Role; joined_at: number }
 export interface Invite { id: string; email: string; role: Role; created_at: number; expires_at: number }
@@ -240,8 +242,24 @@ async function authed(method: string, path: string, body?: unknown): Promise<Res
   return res;
 }
 
+/** Set when a workspace turned on "require single sign-on" under a password session; the sign-in page explains. */
+export const SSO_REQUIRED_NOTE = "peter.sso.required";
+
 export async function api<T>(method: string, path: string, body?: unknown): Promise<T> {
-  return parse<T>(await authed(method, path, body));
+  try {
+    return await parse<T>(await authed(method, path, body));
+  } catch (err) {
+    // A password session is no use in a workspace that now requires single sign-on.
+    if (err instanceof ApiError && err.code === "sso_required" && session && !path.startsWith("/v1/auth/")) {
+      try {
+        sessionStorage.setItem(SSO_REQUIRED_NOTE, "1");
+      } catch {
+        // The sign-in page then simply shows no note.
+      }
+      setSession(null);
+    }
+    throw err;
+  }
 }
 
 export async function uploadFile<T>(path: string, file: File): Promise<T> {

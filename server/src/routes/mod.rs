@@ -15,6 +15,7 @@ mod sessions;
 mod sharing;
 mod style;
 mod sources;
+mod sso;
 mod trace;
 mod workspace;
 
@@ -139,6 +140,11 @@ pub fn router(max_upload_bytes: usize) -> Router<AppState> {
             post(style::add_sample).layer(DefaultBodyLimit::max(10 * 1024 * 1024 + 64 * 1024)),
         )
         .route("/library/style/samples/{sample_id}", delete(style::remove_sample))
+        .route("/workspace/sso", get(sso::get).put(sso::set).delete(sso::remove))
+        .route("/workspace/sso/check", post(sso::check))
+        .route("/auth/sso/start", post(sso::start))
+        .route("/auth/sso/sign-start", post(sso::sign_start))
+        .route("/auth/sso/callback", post(sso::callback))
         .route("/meta", get(meta::meta))
         .route("/extension/download", get(meta::extension_zip))
         .fallback(|| async { AppError::not_found("No such API endpoint.") })
@@ -180,6 +186,8 @@ pub struct SessionView {
     pub workspaces: Vec<WorkspaceView>,
     /// The workspace requires two-factor sign-in and this person has not set it up.
     pub mfa_setup_required: bool,
+    /// Signed in through the workspace's identity provider.
+    pub sso: bool,
 }
 
 pub async fn mfa_setup_required(conn: &mut SqliteConnection, user_id: &str, workspace_id: &str) -> AppResult<bool> {
@@ -221,7 +229,8 @@ pub async fn session_view(
         .map(|w| WorkspaceView { id: w.id.clone(), name: w.name.clone(), role: w.role.clone() })
         .ok_or_else(|| AppError::forbidden("You are not a member of this workspace."))?;
     let mfa_setup_required = mfa_setup_required(conn, user_id, workspace_id).await?;
-    Ok(SessionView { tokens, user, workspace, workspaces, mfa_setup_required })
+    // Callers that know the session came through single sign-on set `sso` (and clear the two-factor prompt).
+    Ok(SessionView { tokens, user, workspace, workspaces, mfa_setup_required, sso: false })
 }
 
 pub fn clean_name(value: &str, field: &'static str) -> AppResult<String> {

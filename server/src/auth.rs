@@ -21,6 +21,8 @@ pub struct Auth {
     pub user_id: String,
     pub workspace_id: String,
     pub role: Role,
+    /// The session was started through the workspace's identity provider.
+    pub sso: bool,
 }
 
 impl Auth {
@@ -47,12 +49,25 @@ impl FromRequestParts<AppState> for Auth {
             .ok_or_else(|| AppError::unauthorized("Use a Bearer token."))?;
 
         // The membership join means a removed member loses access at once.
-        let row: Option<(String, String, String, String, bool, bool)> = sqlx::query_as(
-            "SELECT s.id, s.user_id, s.workspace_id, m.role, w.require_mfa, (um.enabled_at IS NOT NULL)
+        #[derive(sqlx::FromRow)]
+        struct Row {
+            id: String,
+            user_id: String,
+            workspace_id: String,
+            role: String,
+            require_mfa: bool,
+            has_mfa: bool,
+            sso: bool,
+            sso_enforced: bool,
+        }
+        let row: Option<Row> = sqlx::query_as(
+            "SELECT s.id, s.user_id, s.workspace_id, m.role, w.require_mfa, (um.enabled_at IS NOT NULL) AS has_mfa, s.sso,
+                    COALESCE(sso.enabled AND sso.enforce, 0) AS sso_enforced
              FROM sessions s
              JOIN memberships m ON m.workspace_id = s.workspace_id AND m.user_id = s.user_id
              JOIN workspaces w ON w.id = s.workspace_id
              LEFT JOIN user_mfa um ON um.user_id = s.user_id
+             LEFT JOIN workspace_sso sso ON sso.workspace_id = s.workspace_id
              WHERE s.access_hash = ? AND s.revoked_at IS NULL AND s.access_expires_at > ?",
         )
         .bind(hash_token(token))
@@ -60,13 +75,29 @@ impl FromRequestParts<AppState> for Auth {
         .fetch_optional(&state.db)
         .await?;
 
-        let (session_id, user_id, workspace_id, role, require_mfa, has_mfa) =
+        let Row { id: session_id, user_id, workspace_id, role, require_mfa, has_mfa, sso, sso_enforced } =
             row.ok_or_else(|| AppError::unauthorized("Your sign-in has expired. Sign in again."))?;
+        let role = Role::parse(&role)?;
+        let path = parts.extensions.get::<OriginalUri>().map(|u| u.path().to_string()).unwrap_or_else(|| parts.uri.path().to_string());
+
+        // A workspace that requires single sign-on is closed to password
+        // sessions, however they began. Owners keep password access so a
+        // broken identity provider cannot lock the workspace.
+        if sso_enforced && !sso && role != Role::Owner {
+            let allowed = ["/v1/auth/me", "/v1/auth/logout", "/v1/auth/workspaces", "/v1/auth/switch"];
+            if !allowed.contains(&path.as_str()) {
+                return Err(AppError::new(
+                    StatusCode::FORBIDDEN,
+                    "sso_required",
+                    "This workspace requires single sign-on. Sign out and sign in with SSO.",
+                ));
+            }
+        }
 
         // A workspace that requires two-factor sign-in lets people without it
         // do nothing except set it up (or leave, or switch workspace).
-        if require_mfa && !has_mfa {
-            let path = parts.extensions.get::<OriginalUri>().map(|u| u.path().to_string()).unwrap_or_else(|| parts.uri.path().to_string());
+        // People who came through the identity provider are exempt: it does their second factor.
+        if require_mfa && !has_mfa && !sso {
             let allowed = ["/v1/auth/me", "/v1/auth/logout", "/v1/auth/mfa", "/v1/auth/mfa/setup", "/v1/auth/mfa/enable",
                 "/v1/auth/workspaces", "/v1/auth/switch", "/v1/auth/sessions"];
             if !allowed.contains(&path.as_str()) {
@@ -77,7 +108,7 @@ impl FromRequestParts<AppState> for Auth {
                 ));
             }
         }
-        Ok(Auth { session_id, user_id, workspace_id, role: Role::parse(&role)? })
+        Ok(Auth { session_id, user_id, workspace_id, role, sso })
     }
 }
 
@@ -136,6 +167,21 @@ pub async fn start_client_session(
     .execute(&mut *conn)
     .await?;
     Ok(Tokens { access_token: access, refresh_token: refresh, expires_in: state.config.access_ttl_secs })
+}
+
+/// Marks the session these tokens belong to as started through single sign-on.
+pub async fn mark_sso(conn: &mut SqliteConnection, tokens: &Tokens) -> AppResult<()> {
+    sqlx::query("UPDATE sessions SET sso = 1 WHERE access_hash = ?").bind(hash_token(&tokens.access_token)).execute(&mut *conn).await?;
+    Ok(())
+}
+
+/// Whether a workspace refuses password sign-in for this role.
+pub async fn sso_enforced_for(conn: &mut SqliteConnection, workspace_id: &str, role: Role) -> AppResult<bool> {
+    let row: Option<(i64,)> = sqlx::query_as("SELECT 1 FROM workspace_sso WHERE workspace_id = ? AND enabled = 1 AND enforce = 1")
+        .bind(workspace_id)
+        .fetch_optional(&mut *conn)
+        .await?;
+    Ok(row.is_some() && role != Role::Owner)
 }
 
 /// Issues new tokens for an existing session and invalidates the old ones.

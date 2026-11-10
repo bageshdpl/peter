@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, downloadFile, formatTime, type Comment, type Signature } from "./api";
 import type { SessionEvents } from "./events";
+import { useLocation } from "react-router-dom";
+import { useSession } from "./App";
+import { confirmSignatureWithSso } from "./pages/Sso";
 import { messageOf, Notice, useAction } from "./ui";
 
 // ---------- Export ----------
@@ -39,6 +42,9 @@ export function SignaturePanel(props: {
   const [meaning, setMeaning] = useState<Signature["meaning"]>("reviewed");
   const [password, setPassword] = useState("");
   const { busy, error, run } = useAction();
+  // People who came in through the identity provider confirm there; they may have no Peter password.
+  const viaSso = useSession()?.sso === true;
+  const location = useLocation();
   const here = signatures.filter((s) => s.version === version);
   const older = signatures.filter((s) => s.version !== version);
 
@@ -73,6 +79,10 @@ export function SignaturePanel(props: {
           onSubmit={(e) => {
             e.preventDefault();
             run(async () => {
+              if (viaSso) {
+                await confirmSignatureWithSso({ base, version, meaning, returnTo: location.pathname + location.search });
+                return;
+              }
               await api("POST", `${base}/signatures`, { version, meaning, password });
               setPassword("");
               setSigning(false);
@@ -92,14 +102,23 @@ export function SignaturePanel(props: {
             By signing, I confirm that I have {meaning === "approved" ? "reviewed and approve" : "reviewed"} version {version}{" "}
             of “{title}”. My name, this meaning, and the date and time are recorded with the version.
           </p>
-          <label className="field">
-            <span className="field-label">Enter your password to sign</span>
-            <input type="password" required autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} autoFocus />
-          </label>
+          {viaSso ? (
+            <p className="muted small">
+              To sign, you will sign in again at your company's identity provider. Peter brings you back here and records
+              the signature.
+            </p>
+          ) : (
+            <label className="field">
+              <span className="field-label">Enter your password to sign</span>
+              <input type="password" required autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} autoFocus />
+            </label>
+          )}
           {error && <Notice kind="error">{error}</Notice>}
           <div className="form-actions">
             <button type="button" className="btn ghost" onClick={() => setSigning(false)}>Cancel</button>
-            <button className="btn primary" disabled={busy}>Sign as {MEANING[meaning].toLowerCase()}</button>
+            <button className="btn primary" disabled={busy}>
+              {viaSso ? `Confirm with SSO and sign as ${MEANING[meaning].toLowerCase()}` : `Sign as ${MEANING[meaning].toLowerCase()}`}
+            </button>
           </div>
         </form>
       )}

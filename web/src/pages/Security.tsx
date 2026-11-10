@@ -3,6 +3,7 @@ import QRCode from "qrcode";
 import { api, atLeast, formatTime, reloadSession } from "../api";
 import { useSession } from "../App";
 import { messageOf, Notice, useAction } from "../ui";
+import { SsoSettings } from "./Sso";
 
 interface MfaStatus { enabled: boolean; enabled_at: number | null; recovery_codes_left: number; workspace_requires: boolean }
 interface ActiveSession { id: string; client: string; user_agent: string; workspace_name: string; created_at: number; last_used_at: number | null; current: boolean }
@@ -40,6 +41,7 @@ export default function Security() {
       {mfa && <TwoFactor status={mfa} onChange={async () => { await load(); await reloadSession().catch(() => {}); }} />}
       <Sessions />
       {atLeast(session.workspace.role, "admin") && mfa && <Policy status={mfa} onChange={load} />}
+      {atLeast(session.workspace.role, "admin") && <SsoSettings />}
     </div>
   );
 }

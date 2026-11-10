@@ -8,7 +8,7 @@ use serde_json::{Value, json};
 
 use super::{Body, SessionView, clean_name, session_view, user_workspaces};
 use crate::{
-    auth::{Auth, audit, revoke_user_sessions, rotate_session, start_session, user_agent},
+    auth::{Auth, audit, revoke_user_sessions, rotate_session, sso_enforced_for, start_session, user_agent},
     mfa, throttle,
     error::{AppError, AppResult},
     security::{Role, check_new_password, hash_token, new_id, new_token, normalize_email, now},
@@ -123,7 +123,28 @@ pub async fn login(State(state): State<AppState>, headers: HeaderMap, Body(body)
     throttle::clear(&state.db, &key).await?;
 
     let mut tx = state.db.begin().await?;
-    let workspace_id = choose_workspace(&mut tx, &user_id, body.workspace_id).await?;
+    let asked = body.workspace_id.is_some();
+    let mut workspace_id = choose_workspace(&mut tx, &user_id, body.workspace_id).await?;
+    // A workspace that requires single sign-on does not take passwords. If the
+    // person did not ask for it by name, use another of their workspaces.
+    let role = ensure_member(&mut tx, &user_id, &workspace_id).await?;
+    if sso_enforced_for(&mut tx, &workspace_id, role).await? {
+        let other: Option<(String,)> = if asked {
+            None
+        } else {
+            sqlx::query_as(
+                "SELECT m.workspace_id FROM memberships m
+                 LEFT JOIN workspace_sso s ON s.workspace_id = m.workspace_id AND s.enabled = 1 AND s.enforce = 1
+                 WHERE m.user_id = ? AND (s.workspace_id IS NULL OR m.role = 'owner') ORDER BY m.created_at LIMIT 1",
+            )
+            .bind(&user_id)
+            .fetch_optional(&mut *tx)
+            .await?
+        };
+        workspace_id = other.map(|(id,)| id).ok_or_else(|| {
+            AppError::new(StatusCode::FORBIDDEN, "sso_required", "This workspace requires single sign-on. Use \"Sign in with SSO\".")
+        })?;
+    }
 
     // With two-factor sign-in on, the password only earns a short ticket for the code step.
     let has_mfa: Option<(i64,)> = sqlx::query_as("SELECT 1 FROM user_mfa WHERE user_id = ? AND enabled_at IS NOT NULL")
@@ -283,8 +304,8 @@ pub struct RefreshBody {
 
 pub async fn refresh(State(state): State<AppState>, Body(body): Body<RefreshBody>) -> AppResult<Json<SessionView>> {
     let mut tx = state.db.begin().await?;
-    let row: Option<(String, String, String)> = sqlx::query_as(
-        "SELECT s.id, s.user_id, s.workspace_id FROM sessions s
+    let row: Option<(String, String, String, bool)> = sqlx::query_as(
+        "SELECT s.id, s.user_id, s.workspace_id, s.sso FROM sessions s
          JOIN memberships m ON m.workspace_id = s.workspace_id AND m.user_id = s.user_id
          WHERE s.refresh_hash = ? AND s.revoked_at IS NULL AND s.refresh_expires_at > ?",
     )
@@ -292,10 +313,13 @@ pub async fn refresh(State(state): State<AppState>, Body(body): Body<RefreshBody
     .bind(now())
     .fetch_optional(&mut *tx)
     .await?;
-    let (session_id, user_id, workspace_id) =
+    let (session_id, user_id, workspace_id, sso) =
         row.ok_or_else(|| AppError::unauthorized("Your sign-in has expired. Sign in again."))?;
     let tokens = rotate_session(&mut tx, &state, &session_id).await?;
-    let view = session_view(&mut tx, tokens, &user_id, &workspace_id).await?;
+    let mut view = session_view(&mut tx, tokens, &user_id, &workspace_id).await?;
+    if sso {
+        (view.sso, view.mfa_setup_required) = (true, false);
+    }
     tx.commit().await?;
     Ok(Json(view))
 }
@@ -317,8 +341,9 @@ pub async fn me(State(state): State<AppState>, auth: Auth) -> AppResult<Json<Val
         .await?;
     let workspaces = user_workspaces(&mut conn, &auth.user_id).await?;
     let workspace = workspaces.iter().find(|w| w.id == auth.workspace_id);
-    let mfa_setup_required = super::mfa_setup_required(&mut conn, &auth.user_id, &auth.workspace_id).await?;
-    Ok(Json(json!({ "user": user, "workspace": workspace, "workspaces": workspaces, "mfa_setup_required": mfa_setup_required })))
+    let mfa_setup_required = !auth.sso && super::mfa_setup_required(&mut conn, &auth.user_id, &auth.workspace_id).await?;
+    Ok(Json(json!({ "user": user, "workspace": workspace, "workspaces": workspaces, "mfa_setup_required": mfa_setup_required,
+        "sso": auth.sso })))
 }
 
 pub async fn workspaces(State(state): State<AppState>, auth: Auth) -> AppResult<Json<Value>> {
@@ -338,15 +363,36 @@ pub async fn switch(
     auth: Auth,
     Body(body): Body<SwitchBody>,
 ) -> AppResult<Json<SessionView>> {
+    // The identity provider vouches for this workspace only.
+    if auth.sso && body.workspace_id != auth.workspace_id {
+        return Err(AppError::new(
+            StatusCode::FORBIDDEN,
+            "sso_session",
+            "You signed in to this workspace with single sign-on. To open another workspace, sign out and sign in to it.",
+        ));
+    }
     let mut tx = state.db.begin().await?;
-    ensure_member(&mut tx, &auth.user_id, &body.workspace_id).await?;
+    let role = ensure_member(&mut tx, &auth.user_id, &body.workspace_id).await?;
+    if !auth.sso && sso_enforced_for(&mut tx, &body.workspace_id, role).await? {
+        return Err(AppError::new(
+            StatusCode::FORBIDDEN,
+            "sso_required",
+            "That workspace requires single sign-on. Sign out and use \"Sign in with SSO\".",
+        ));
+    }
     sqlx::query("UPDATE sessions SET revoked_at = ? WHERE id = ?")
         .bind(now())
         .bind(&auth.session_id)
         .execute(&mut *tx)
         .await?;
     let tokens = start_session(&mut tx, &state, &auth.user_id, &body.workspace_id, &user_agent(&headers)).await?;
-    let view = session_view(&mut tx, tokens, &auth.user_id, &body.workspace_id).await?;
+    if auth.sso {
+        crate::auth::mark_sso(&mut tx, &tokens).await?;
+    }
+    let mut view = session_view(&mut tx, tokens, &auth.user_id, &body.workspace_id).await?;
+    if auth.sso {
+        (view.sso, view.mfa_setup_required) = (true, false);
+    }
     tx.commit().await?;
     Ok(Json(view))
 }

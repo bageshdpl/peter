@@ -64,6 +64,19 @@ async fn check_code(state: &AppState, user_id: &str, code: &str, pending: bool) 
     }
 }
 
+/// Two-factor settings protect the person's password sign-in everywhere, so a
+/// session vouched for by one workspace's identity provider may not change them.
+fn not_from_sso(auth: &Auth) -> AppResult<()> {
+    if auth.sso {
+        return Err(AppError::new(
+            StatusCode::FORBIDDEN,
+            "sso_session",
+            "You signed in with single sign-on, which handles two-factor sign-in. To change Peter's own, sign in with your password.",
+        ));
+    }
+    Ok(())
+}
+
 pub async fn status(State(state): State<AppState>, auth: Auth) -> AppResult<Json<Value>> {
     let row: Option<(Option<i64>,)> =
         sqlx::query_as("SELECT enabled_at FROM user_mfa WHERE user_id = ?").bind(&auth.user_id).fetch_optional(&state.db).await?;
@@ -81,6 +94,7 @@ pub async fn status(State(state): State<AppState>, auth: Auth) -> AppResult<Json
 
 /// Starts setup: a new secret for the authenticator app. Not active until confirmed.
 pub async fn setup(State(state): State<AppState>, auth: Auth) -> AppResult<Json<Value>> {
+    not_from_sso(&auth)?;
     let enabled: Option<(i64,)> = sqlx::query_as("SELECT 1 FROM user_mfa WHERE user_id = ? AND enabled_at IS NOT NULL")
         .bind(&auth.user_id)
         .fetch_optional(&state.db)
@@ -109,6 +123,7 @@ pub struct CodeBody {
 
 /// Confirms setup with a code from the app. Returns recovery codes, shown once.
 pub async fn enable(State(state): State<AppState>, auth: Auth, Body(body): Body<CodeBody>) -> AppResult<Json<Value>> {
+    not_from_sso(&auth)?;
     check_code(&state, &auth.user_id, &body.code, true).await?;
     let mut tx = state.db.begin().await?;
     sqlx::query("UPDATE user_mfa SET enabled_at = ? WHERE user_id = ?").bind(now()).bind(&auth.user_id).execute(&mut *tx).await?;
@@ -125,6 +140,7 @@ pub struct DisableBody {
 }
 
 pub async fn disable(State(state): State<AppState>, auth: Auth, Body(body): Body<DisableBody>) -> AppResult<StatusCode> {
+    not_from_sso(&auth)?;
     let key = throttle::user_key(&auth.user_id);
     throttle::check(&state.db, &key).await?;
     let (hash,): (String,) = sqlx::query_as("SELECT password_hash FROM users WHERE id = ?").bind(&auth.user_id).fetch_one(&state.db).await?;
@@ -143,6 +159,7 @@ pub async fn disable(State(state): State<AppState>, auth: Auth, Body(body): Body
 
 /// New recovery codes, replacing the old ones. Needs a current app code.
 pub async fn regenerate_codes(State(state): State<AppState>, auth: Auth, Body(body): Body<CodeBody>) -> AppResult<Json<Value>> {
+    not_from_sso(&auth)?;
     check_code(&state, &auth.user_id, &body.code, false).await?;
     let mut tx = state.db.begin().await?;
     let codes = new_recovery_codes(&mut tx, &auth.user_id).await?;
@@ -163,15 +180,22 @@ struct SessionRow {
     last_used_at: Option<i64>,
 }
 
+/// A single sign-on session sees and ends sessions in its own workspace only.
+fn only_workspace(auth: &Auth) -> Option<&str> {
+    auth.sso.then_some(auth.workspace_id.as_str())
+}
+
 pub async fn list_sessions(State(state): State<AppState>, auth: Auth) -> AppResult<Json<Value>> {
     let rows: Vec<SessionRow> = sqlx::query_as(
         "SELECT s.id, s.client, s.user_agent, w.name AS workspace_name, s.created_at, s.last_used_at
          FROM sessions s JOIN workspaces w ON w.id = s.workspace_id
-         WHERE s.user_id = ? AND s.revoked_at IS NULL AND s.refresh_expires_at > ?
+         WHERE s.user_id = ? AND s.revoked_at IS NULL AND s.refresh_expires_at > ? AND (? IS NULL OR s.workspace_id = ?)
          ORDER BY COALESCE(s.last_used_at, s.created_at) DESC",
     )
     .bind(&auth.user_id)
     .bind(now())
+    .bind(only_workspace(&auth))
+    .bind(only_workspace(&auth))
     .fetch_all(&state.db)
     .await?;
     let sessions: Vec<Value> = rows
@@ -188,10 +212,12 @@ pub async fn list_sessions(State(state): State<AppState>, auth: Auth) -> AppResu
 
 pub async fn revoke_session(State(state): State<AppState>, auth: Auth, Path(id): Path<String>) -> AppResult<StatusCode> {
     let mut tx = state.db.begin().await?;
-    let done = sqlx::query("UPDATE sessions SET revoked_at = ? WHERE id = ? AND user_id = ? AND revoked_at IS NULL")
+    let done = sqlx::query("UPDATE sessions SET revoked_at = ? WHERE id = ? AND user_id = ? AND revoked_at IS NULL AND (? IS NULL OR workspace_id = ?)")
         .bind(now())
         .bind(&id)
         .bind(&auth.user_id)
+        .bind(only_workspace(&auth))
+        .bind(only_workspace(&auth))
         .execute(&mut *tx)
         .await?;
     if done.rows_affected() == 0 {
@@ -204,10 +230,12 @@ pub async fn revoke_session(State(state): State<AppState>, auth: Auth, Path(id):
 
 pub async fn revoke_other_sessions(State(state): State<AppState>, auth: Auth) -> AppResult<Json<Value>> {
     let mut tx = state.db.begin().await?;
-    let done = sqlx::query("UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND id <> ? AND revoked_at IS NULL")
+    let done = sqlx::query("UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND id <> ? AND revoked_at IS NULL AND (? IS NULL OR workspace_id = ?)")
         .bind(now())
         .bind(&auth.user_id)
         .bind(&auth.session_id)
+        .bind(only_workspace(&auth))
+        .bind(only_workspace(&auth))
         .execute(&mut *tx)
         .await?;
     audit(&mut tx, Some(&auth.workspace_id), Some(&auth.user_id), "auth.other_sessions_revoked", None,

@@ -13,6 +13,7 @@ import Security from "./pages/Security";
 import Library from "./pages/Library";
 import Notifications from "./pages/Notifications";
 import AiSettings from "./pages/AiSettings";
+import { SsoCallback, SsoStart } from "./pages/Sso";
 
 export function useSession() {
   const [session, setSession] = useState<Session | null>(getSession());
@@ -40,6 +41,8 @@ export default function App() {
       <Route path="/forgot" element={<ForgotPassword />} />
       <Route path="/reset" element={<ResetPassword />} />
       <Route path="/invite" element={<AcceptInvite />} />
+      <Route path="/sso/callback" element={<SsoCallback />} />
+      <Route path="/sso/:workspaceId" element={<SsoStart />} />
       <Route
         element={
           <RequireSession>

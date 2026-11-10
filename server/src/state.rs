@@ -27,6 +27,9 @@ pub struct Config {
     pub web_dir: Option<std::path::PathBuf>,
     /// The extension's folder, offered as a download set up for this server.
     pub extension_dir: Option<std::path::PathBuf>,
+    /// Lets single sign-on use an identity provider on this machine or over
+    /// plain http. For development and tests only.
+    pub sso_allow_local: bool,
 }
 
 impl Config {
@@ -50,6 +53,7 @@ impl Config {
             ai: crate::ai::AiConfig::from_env(),
             web_dir: std::env::var("PETER_WEB_DIR").ok().filter(|v| !v.is_empty()).map(Into::into),
             extension_dir: std::env::var("PETER_EXTENSION_DIR").ok().filter(|v| !v.is_empty()).map(Into::into),
+            sso_allow_local: var("PETER_SSO_ALLOW_LOCAL", "false") == "true",
         }
     }
 
@@ -57,7 +61,7 @@ impl Config {
         let data_dir = std::env::temp_dir().join(format!("peter-test-{}", uuid::Uuid::new_v4().simple()));
         // Tests never use real keys; they point providers at local fakes when needed.
         let ai = crate::ai::AiConfig { openrouter_key: None, gemini_key: None, sample: true, ..crate::ai::AiConfig::from_env() };
-        Self { database_url: "sqlite::memory:".into(), data_dir, max_upload_bytes: 1024 * 1024, ai, ..Self::from_env() }
+        Self { database_url: "sqlite::memory:".into(), data_dir, max_upload_bytes: 1024 * 1024, ai, sso_allow_local: true, ..Self::from_env() }
     }
 }
 

@@ -303,6 +303,54 @@ Open **Security** in the sidebar.
 
 Everything here is recorded in the audit trail.
 
+### Single sign-on (OpenID Connect)
+
+Admins set it up under **Security → Single sign-on**. It works with Microsoft
+Entra ID, Okta, Google Workspace, Auth0, Keycloak and any other provider that
+speaks OpenID Connect.
+
+1. At the provider, register a **web application** and give it the redirect
+   address Peter shows (`<PETER_APP_URL>/sso/callback`). Ask for the `openid`,
+   `email` and `profile` scopes. Note its issuer address, client ID and client
+   secret.
+2. In Peter, enter those three, optionally the email domains you accept, tick
+   **Turn single sign-on on** and save. Peter refuses to save if it cannot
+   reach the provider. The secret is encrypted (see `PETER_SECRET_KEY`) and
+   never shown again.
+3. Give colleagues the **sign-in link** Peter shows, or tell people already in
+   the workspace to choose **Sign in with SSO** and enter their email.
+
+How it behaves:
+
+- **This workspace only.** A provider vouches for people in the workspace that
+  set it up and nowhere else. Someone signed in through it cannot switch to
+  another workspace, change Peter's own two-factor settings, or see or end
+  their sessions elsewhere; for those they sign in with their password.
+- **New people.** With **Let new people join on their first sign-in** on, a
+  first sign-in creates the account (as member or viewer, your choice) and is
+  recorded in the audit trail. Off, only people you invited get in.
+- **Require single sign-on.** Passwords stop working for the workspace at
+  once, including sessions already open, for everyone except owners. Owners
+  keep password access so a broken provider cannot lock the workspace. An
+  admin who is not an owner must have signed in through it before requiring it.
+- **Two-factor sign-in.** The provider does it; Peter's own requirement does
+  not apply to people who came through the provider.
+- **Signing documents.** People who came through the provider confirm a
+  signature by signing in again there (Peter asks it for a fresh sign-in),
+  instead of a Peter password. The audit trail records which was used.
+- **What Peter checks.** The provider's answer must be signed with the
+  provider's published keys (RSA, ECDSA or EdDSA; never unsigned or
+  shared-secret), name this workspace's client ID and issuer, be unexpired,
+  and belong to the sign-in Peter started (state, nonce and PKCE). Each
+  answer works once. Emails the provider marks unverified are refused.
+- An account made by single sign-on has no password. To get one, use
+  **Forgot your password?**.
+
+Limits: SAML and SCIM are not built yet. "Sign in with SSO" by email tells
+the person whether that email belongs to a workspace with single sign-on.
+The issuer must be a public `https` address; `PETER_SSO_ALLOW_LOCAL=true`
+allows a local or plain-http provider for development only.
+
 Not yet: limits per network address, and encrypting the authenticator secrets
 in the database (they are stored as plain text, so protect the database file).
 
@@ -344,6 +392,7 @@ window (or a private window) without email.
 | `PETER_MAX_UPLOAD_MB` | `25` | largest file accepted |
 | `PETER_ALLOW_SIGNUP` + `PETER_ADMIN_EMAIL` | `true`, none | with sign-up off, only this email may create the first account |
 | `PETER_EXTENSION_DIR` | none | the extension folder; Peter then offers it as a download set up for `PETER_APP_URL` |
+| `PETER_SSO_ALLOW_LOCAL` | `false` | `true` lets single sign-on use a provider on this machine or over plain http (development only) |
 | `PETER_WEB_DIR` | none | folder of the built web app (`web/dist`); the server then serves the app too, so no Node.js is needed |
 
 ## API (M0)
@@ -440,7 +489,7 @@ stream adds `step` and `document` events.
 | `GET /v1/sessions/{id}/documents/{step_id}/comments` | member | comments and replies |
 | `POST /v1/sessions/{id}/documents/{step_id}/comments` | any role | `body`, optional `quote`, optional `parent_id` to reply |
 | `POST /v1/comments/{id}/resolve`, `/reopen` | its author, or member+ | threads only |
-| `POST /v1/sessions/{id}/documents/{step_id}/signatures` | member+ | `version` (the current one), `meaning` (`reviewed`/`approved`), `password` |
+| `POST /v1/sessions/{id}/documents/{step_id}/signatures` | member+ | `version` (the current one), `meaning` (`reviewed`/`approved`), `password`, or `sso_token` from a fresh sign-in at the provider |
 | `GET /v1/sessions/{id}/documents/{step_id}/export/docx?version=` | member | Word file |
 | `GET /v1/sessions/{id}/documents/{step_id}/export/pdf?version=` | member | PDF file |
 | `GET /v1/sessions/{id}/documents/{step_id}/export/xlsx?version=` | member | Excel file of the tables (422 if none) |
@@ -462,6 +511,13 @@ and `open_comments`.
 | Method and path | Who | What |
 | --- | --- | --- |
 | `POST /v1/auth/login` | anyone | with two-factor on, answers `{ "mfa_required": true, "mfa_token" }` instead of a session |
+| `GET /v1/workspace/sso` | admin | single sign-on settings (never the secret), the redirect address and the sign-in link |
+| `PUT /v1/workspace/sso` | admin | `issuer`, `client_id`, `client_secret` (left out keeps it), `enabled`, `enforce`, `auto_join`, `default_role`, `domains` |
+| `DELETE /v1/workspace/sso` | admin | remove it |
+| `POST /v1/workspace/sso/check` | admin | try the saved provider: `{ "ok", "message" }` |
+| `POST /v1/auth/sso/start` | anyone | `workspace_id` or `email`; answers `{ "url" }` at the provider |
+| `POST /v1/auth/sso/callback` | anyone | `code` and `state` from the provider; answers a session, or `{ "purpose": "sign", "sign_token" }` |
+| `POST /v1/auth/sso/sign-start` | member+ | `{ "url" }` for a fresh sign-in at the provider, to confirm a signature |
 | `POST /v1/auth/login/mfa` | anyone | `mfa_token` plus `code` or `recovery_code`; returns the session |
 | `GET /v1/auth/mfa` | signed in | whether two-factor is on, recovery codes left, whether the workspace requires it |
 | `POST /v1/auth/mfa/setup` | signed in | a new secret and `otpauth_url` (not active until enabled) |

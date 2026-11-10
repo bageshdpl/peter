@@ -30,6 +30,9 @@ const ACTIONS: Record<string, string> = {
   "auth.session_revoked": "Signed out a device",
   "auth.other_sessions_revoked": "Signed out all other devices",
   "workspace.mfa_policy_changed": "Changed the two-factor requirement",
+  "workspace.sso_changed": "Changed single sign-on",
+  "workspace.sso_removed": "Removed single sign-on",
+  "member.joined_by_sso": "Joined through single sign-on",
   "document.drafted": "Drafted a document",
   "document.draft_failed": "A draft failed",
   "document.edited": "Edited a document",
@@ -76,11 +79,16 @@ function describe(e: AuditEvent): string {
     case "member.joined":
       return `as ${String(d.role)}`;
     case "auth.login":
+      if (d.sso) return "with single sign-on";
       return d.mfa ? (d.method === "recovery_code" ? "with a recovery code" : "with two-factor") : "";
+    case "member.joined_by_sso":
+      return `${String(d.email)} as ${String(d.role)}${d.account_created ? ", new account" : ""}`;
+    case "workspace.sso_changed":
+      return `${d.enabled ? "on" : "off"}${d.enforce ? ", required" : ""}`;
     case "workspace.mfa_policy_changed":
       return d.require_mfa ? "required" : "optional";
     case "document.signed":
-      return `${String(d.meaning)}, version ${String(d.version)}`;
+      return `${String(d.meaning)}, version ${String(d.version)}${d.confirmed_by === "sso" ? ", confirmed with single sign-on" : ""}`;
     case "library.template_added":
       return String(d.name ?? "");
     case "library.standards_changed":

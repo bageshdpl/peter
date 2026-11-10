@@ -224,10 +224,14 @@ pub async fn reopen_comment(State(state): State<AppState>, auth: Auth, Path(id):
 pub struct SignBody {
     version: i64,
     meaning: String,
-    password: String,
+    /// The signer's Peter password, or
+    password: Option<String>,
+    /// proof of a fresh sign-in at the workspace's identity provider.
+    sso_token: Option<String>,
 }
 
-/// Signs the current version. The signer re-enters their password, and their
+/// Signs the current version. The signer re-enters their password (or signs
+/// in again at the workspace's identity provider), and their
 /// name, the meaning and the time are recorded with the version.
 pub async fn sign(
     State(state): State<AppState>,
@@ -256,12 +260,22 @@ pub async fn sign(
     // Not 401: the person is signed in; only this confirmation failed.
     let key = crate::throttle::user_key(&auth.user_id);
     crate::throttle::check(&state.db, &key).await?;
-    if !verify_password(body.password, hash).await? {
-        let wrong = AppError::bad_request("wrong_password", "That password is not right. The version was not signed.");
-        return Err(crate::throttle::fail(&state.db, &key).await?.unwrap_or(wrong));
+    let method = if body.sso_token.is_some() { "sso" } else { "password" };
+    if let Some(password) = body.password.filter(|_| method == "password") {
+        if !verify_password(password, hash).await? {
+            let wrong = AppError::bad_request("wrong_password", "That password is not right. The version was not signed.");
+            return Err(crate::throttle::fail(&state.db, &key).await?.unwrap_or(wrong));
+        }
+        crate::throttle::clear(&state.db, &key).await?;
+    } else if method == "password" {
+        return Err(AppError::bad_request("invalid_body", "Enter your password to sign."));
     }
-    crate::throttle::clear(&state.db, &key).await?;
     let mut tx = state.db.begin().await?;
+    if let Some(token) = &body.sso_token
+        && !super::sso::spend_sign_ticket(&mut tx, token, &auth.user_id, &auth.workspace_id).await?
+    {
+        return Err(AppError::bad_request("sso_confirmation_expired", "The single sign-on confirmation has expired or was already used. Confirm again."));
+    }
     let id = new_id();
     let t = now();
     let inserted = sqlx::query(
@@ -282,7 +296,8 @@ pub async fn sign(
         return Err(AppError::conflict("already_signed", "You have already signed this version with that meaning."));
     }
     audit(&mut tx, Some(&auth.workspace_id), Some(&auth.user_id), "document.signed", Some(&doc_id),
-        json!({ "session_id": session_id, "step_id": step_id, "version": current, "meaning": body.meaning })).await?;
+        json!({ "session_id": session_id, "step_id": step_id, "version": current, "meaning": body.meaning,
+                "confirmed_by": method })).await?;
 
     // Signing completes the signer's open review requests for this document,
     // and tells whoever asked.

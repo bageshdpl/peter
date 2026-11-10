@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { api, clearHash, readHashToken, serverMeta, signIn, startSession, type ServerMeta } from "../api";
+import { api, clearHash, readHashToken, serverMeta, signIn, SSO_REQUIRED_NOTE, startSession, type ServerMeta } from "../api";
+import { goToProvider } from "./Sso";
 
 function useMeta() {
   const [meta, setMeta] = useState<ServerMeta | null>(null);
@@ -21,7 +22,34 @@ export function SignIn() {
   const [mfaToken, setMfaToken] = useState<string | null>(null);
   const [code, setCode] = useState("");
   const [useRecovery, setUseRecovery] = useState(false);
+  const [sso, setSso] = useState(false);
+  const [ssoNote] = useState(() => {
+    try {
+      const noted = sessionStorage.getItem(SSO_REQUIRED_NOTE) !== null;
+      sessionStorage.removeItem(SSO_REQUIRED_NOTE);
+      return noted;
+    } catch {
+      return false;
+    }
+  });
   const { busy, error, setError, run } = useAction();
+
+  if (sso) {
+    return (
+      <AuthCard title="Sign in with SSO">
+        <form onSubmit={(e) => { e.preventDefault(); run(() => goToProvider("/v1/auth/sso/start", { email })); }}>
+          {error && <Notice kind="error">{error}</Notice>}
+          <p className="muted">Enter your work email. Peter takes you to your company's sign-in page.</p>
+          <Field label="Work email" type="email" value={email} onChange={setEmail} autoComplete="email" autoFocus />
+          <button className="btn primary wide" disabled={busy}>{busy ? "One moment…" : "Continue"}</button>
+        </form>
+        <p className="auth-links">
+          <button type="button" className="link-btn" onClick={() => { setSso(false); setError(null); }}>Use a password instead</button>
+          <span>First time? Use the sign-in link your administrator gave you.</span>
+        </p>
+      </AuthCard>
+    );
+  }
 
   if (mfaToken) {
     return (
@@ -83,10 +111,12 @@ export function SignIn() {
         }}
       >
         {error && <Notice kind="error">{error}</Notice>}
+        {ssoNote && !error && <Notice kind="error">That workspace now requires single sign-on. Choose “Sign in with SSO” below.</Notice>}
         <Field label="Email" type="email" value={email} onChange={setEmail} autoComplete="email" autoFocus />
         <Field label="Password" type="password" value={password} onChange={setPassword} autoComplete="current-password" />
         <button className="btn primary wide" disabled={busy}>{busy ? "Signing in…" : "Sign in"}</button>
       </form>
+      <button type="button" className="btn ghost wide sso-btn" onClick={() => { setSso(true); setError(null); }}>Sign in with SSO</button>
       <p className="auth-links">
         <Link to="/forgot">Forgot your password?</Link>
         {meta?.signup === "invite_only" ? (

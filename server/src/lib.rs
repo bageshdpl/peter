@@ -14,6 +14,7 @@ pub mod prompts;
 pub mod routes;
 pub mod secrets;
 pub mod security;
+pub mod sso;
 pub mod standards;
 pub mod storage;
 pub mod state;

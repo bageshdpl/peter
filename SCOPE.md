@@ -88,12 +88,12 @@ Each module is decided on its own: in, later, or out.
 ### M8. Sharing and collaboration (done)
 - Share a document or session with a person; "shared with me"; notifications count.
 
-### M9. Administration and enterprise (sign-in limits, two-factor sign-in and active sessions done)
+### M9. Administration and enterprise (sign-in limits, two-factor sign-in, active sessions and OIDC single sign-on done)
 - Two-factor sign-in, password reset, change password.
 - Audit trail of every change.
 - Security settings, usage summary.
 - Bring-your-own AI key (done), with a usage summary (done).
-- SSO (OIDC, SAML), SCIM provisioning.
+- SSO: OpenID Connect (done), SAML. SCIM provisioning.
 - Billing (Stripe), seats, trial.
 - Support requests, feedback, release notes, help videos, tutorial with a practice system.
 - Voice notes during a session, with custom vocabulary.

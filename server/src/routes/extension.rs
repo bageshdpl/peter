@@ -20,7 +20,7 @@ pub async fn create_code(State(state): State<AppState>, auth: Auth) -> AppResult
     let code = new_token();
     let t = now();
     sqlx::query(
-        "INSERT INTO extension_codes (id, code_hash, user_id, workspace_id, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO extension_codes (id, code_hash, user_id, workspace_id, created_at, expires_at, sso) VALUES (?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(new_id())
     .bind(hash_token(&code))
@@ -28,6 +28,7 @@ pub async fn create_code(State(state): State<AppState>, auth: Auth) -> AppResult
     .bind(&auth.workspace_id)
     .bind(t)
     .bind(t + CODE_TTL_SECS)
+    .bind(auth.sso)
     .execute(&state.db)
     .await?;
     Ok((StatusCode::CREATED, Json(json!({ "code": code, "expires_in": CODE_TTL_SECS }))))
@@ -44,8 +45,8 @@ pub async fn exchange(
     Body(body): Body<ExchangeBody>,
 ) -> AppResult<Json<SessionView>> {
     let mut tx = state.db.begin().await?;
-    let row: Option<(String, String, String)> = sqlx::query_as(
-        "SELECT c.id, c.user_id, c.workspace_id FROM extension_codes c
+    let row: Option<(String, String, String, bool)> = sqlx::query_as(
+        "SELECT c.id, c.user_id, c.workspace_id, c.sso FROM extension_codes c
          JOIN memberships m ON m.user_id = c.user_id AND m.workspace_id = c.workspace_id
          WHERE c.code_hash = ? AND c.used_at IS NULL AND c.expires_at > ?",
     )
@@ -53,12 +54,19 @@ pub async fn exchange(
     .bind(now())
     .fetch_optional(&mut *tx)
     .await?;
-    let (code_id, user_id, workspace_id) = row
+    let (code_id, user_id, workspace_id, sso) = row
         .ok_or_else(|| AppError::bad_request("invalid_code", "This connect code has expired or was already used. Connect again from Peter."))?;
     sqlx::query("UPDATE extension_codes SET used_at = ? WHERE id = ?").bind(now()).bind(&code_id).execute(&mut *tx).await?;
     let tokens = start_client_session(&mut tx, &state, &user_id, &workspace_id, "extension", &crate::auth::user_agent(&headers)).await?;
     audit(&mut tx, Some(&workspace_id), Some(&user_id), "extension.connected", None, json!({})).await?;
-    let view = session_view(&mut tx, tokens, &user_id, &workspace_id).await?;
+    // An extension connected from a single sign-on session is one too.
+    if sso {
+        crate::auth::mark_sso(&mut tx, &tokens).await?;
+    }
+    let mut view = session_view(&mut tx, tokens, &user_id, &workspace_id).await?;
+    if sso {
+        (view.sso, view.mfa_setup_required) = (true, false);
+    }
     tx.commit().await?;
     Ok(Json(view))
 }
